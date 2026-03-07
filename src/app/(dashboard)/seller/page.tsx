@@ -3,6 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import PlaceholderCard from "@/components/PlaceholderCard";
 import EmptyState from "@/components/EmptyState";
+import GoLivePanel from "@/components/seller/GoLivePanel";
+import { fetchRestaurants } from "@/lib/restaurants";
+import type { SellerSession } from "@/lib/types";
 
 export default async function SellerDashboard() {
   const supabase = await createClient();
@@ -24,6 +27,28 @@ export default async function SellerDashboard() {
 
   const firstName = profile.display_name.split(" ")[0].toUpperCase();
 
+  const restaurantList = await fetchRestaurants();
+
+  // Fetch active session for this seller
+  const { data: activeSessionData } = await supabase
+    .from("seller_sessions")
+    .select("id, seller_id, restaurant_id, started_at, ended_at, wait_duration_minutes, status")
+    .eq("seller_id", user.id)
+    .eq("status", "active")
+    .maybeSingle();
+
+  const activeSession: SellerSession | null = activeSessionData
+    ? {
+        id: activeSessionData.id,
+        sellerId: activeSessionData.seller_id,
+        restaurantId: activeSessionData.restaurant_id,
+        startedAt: activeSessionData.started_at,
+        endedAt: activeSessionData.ended_at,
+        waitDurationMinutes: activeSessionData.wait_duration_minutes,
+        status: activeSessionData.status,
+      }
+    : null;
+
   return (
     <div className="space-y-8">
       {/* Welcome */}
@@ -32,25 +57,14 @@ export default async function SellerDashboard() {
           HEY, {firstName}.
         </h1>
         <p className="font-[family-name:var(--font-body)] text-[15px] text-sidewalk">
-          You&apos;re not in line right now.
+          {activeSession
+            ? "You're currently in line."
+            : "You're not in line right now."}
         </p>
       </div>
 
       {/* Go Live */}
-      <div className="bg-ticket rounded-[10px] p-6 border-2 border-mustard shadow-[0_4px_20px_rgba(0,0,0,0.06)]">
-        <h2 className="font-[family-name:var(--font-display)] text-[22px] tracking-[1px] mb-2">
-          GO LIVE
-        </h2>
-        <p className="font-[family-name:var(--font-body)] text-[13px] text-sidewalk mb-5">
-          Already in line? Let nearby buyers know you can order for them.
-        </p>
-        <button
-          disabled
-          className="w-full py-3 bg-mustard text-chalkboard font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] opacity-50 cursor-not-allowed"
-        >
-          I&apos;M IN LINE
-        </button>
-      </div>
+      <GoLivePanel restaurants={restaurantList} activeSession={activeSession} />
 
       {/* Earnings */}
       <PlaceholderCard title="YOUR EARNINGS">
