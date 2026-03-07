@@ -107,10 +107,8 @@ export async function capturePaymentIntent(orderId: string) {
     { idempotencyKey: `capture_pi_${orderId}` }
   );
 
-  await supabase
-    .from("orders")
-    .update({ status: "ready" })
-    .eq("id", orderId);
+  // Status transition is handled by the transition_order RPC in order-actions.
+  // Do NOT update order status here to avoid bypassing the state machine.
 
   return captured;
 }
@@ -152,8 +150,6 @@ export async function cancelPaymentIntent(orderId: string) {
     );
   }
 
-  await supabase
-    .from("orders")
-    .update({ status: "cancelled" })
-    .eq("id", orderId);
+  // Status transition is handled by the transition_order RPC in order-actions.
+  // Do NOT update order status here to avoid bypassing the state machine.
 }

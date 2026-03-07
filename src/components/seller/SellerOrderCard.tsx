@@ -1,7 +1,15 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { Order, OrderStatus } from "@/lib/types";
+import { PENDING_TIMEOUT_MS } from "@/lib/orders/state-machine";
+import {
+  acceptOrder,
+  declineOrder,
+  markInProgress,
+  markReady,
+  markCompleted,
+} from "@/app/(dashboard)/seller/order-actions";
 
 interface SellerOrderCardProps {
   order: Order;
@@ -28,8 +36,10 @@ function getStatusBadge(status: OrderStatus) {
       return { label: "READY", bg: "bg-[#FDECEA]", text: "text-[#C4382A]" };
     case "completed":
       return { label: "COMPLETE", bg: "bg-[#E8E8E8]", text: "text-[#666]" };
+    case "cancelled":
+      return { label: "CANCELLED", bg: "bg-[#E8E8E8]", text: "text-[#666]" };
     default:
-      return { label: status.toUpperCase(), bg: "bg-[#E8E8E8]", text: "text-[#666]" };
+      return { label: (status as string).toUpperCase(), bg: "bg-[#E8E8E8]", text: "text-[#666]" };
   }
 }
 
@@ -46,12 +56,12 @@ export default function SellerOrderCard({
   onStatusChange,
 }: SellerOrderCardProps) {
   const [timeAgo, setTimeAgo] = useState(() => getTimeAgo(order.createdAt));
-  const [lastProcessedStatus, setLastProcessedStatus] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [autoExpireSeconds, setAutoExpireSeconds] = useState<number | null>(null);
   const badge = getStatusBadge(order.status);
 
-  // isProcessing is true only between when we fire the action and when the status actually changes
-  const isProcessing = lastProcessedStatus !== null && lastProcessedStatus === order.status;
-
+  // ── Time-ago ticker ───────────────────────────────────────
   useEffect(() => {
     const interval = setInterval(() => {
       setTimeAgo(getTimeAgo(order.createdAt));
@@ -59,17 +69,85 @@ export default function SellerOrderCard({
     return () => clearInterval(interval);
   }, [order.createdAt]);
 
-  // Double-tap prevention
+  // ── Auto-cancel countdown for pending orders ──────────────
+  useEffect(() => {
+    if (order.status !== "pending") {
+      setAutoExpireSeconds(null);
+      return;
+    }
+
+    const createdMs = new Date(order.createdAt).getTime();
+    const expiresAt = createdMs + PENDING_TIMEOUT_MS;
+
+    function tick() {
+      const remaining = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+      setAutoExpireSeconds(remaining);
+
+      if (remaining <= 0) {
+        // Auto-decline
+        handleAction("cancelled");
+      }
+    }
+
+    tick();
+    const interval = setInterval(tick, 1000);
+
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order.status, order.createdAt, order.id]);
+
+  // ── Server action dispatcher ──────────────────────────────
   const handleAction = useCallback(
-    (newStatus: OrderStatus | "cancelled") => {
+    async (newStatus: OrderStatus | "cancelled") => {
       if (isProcessing) return;
-      setLastProcessedStatus(order.status);
-      onStatusChange(order.id, newStatus);
+      setIsProcessing(true);
+      setActionError(null);
+
+      try {
+        let result: { success?: boolean; error?: string };
+
+        switch (newStatus) {
+          case "accepted":
+            result = await acceptOrder(order.id);
+            break;
+          case "cancelled":
+            result = await declineOrder(order.id);
+            break;
+          case "in-progress":
+            result = await markInProgress(order.id);
+            break;
+          case "ready":
+            result = await markReady(order.id);
+            break;
+          case "completed":
+            result = await markCompleted(order.id);
+            break;
+          default:
+            result = { error: "Unknown action" };
+        }
+
+        if (result.error) {
+          setActionError(result.error);
+        } else {
+          // Notify parent for optimistic UI update via order bus
+          onStatusChange(order.id, newStatus);
+        }
+      } catch {
+        setActionError("Something went wrong. Try again.");
+      } finally {
+        setIsProcessing(false);
+      }
     },
-    [isProcessing, onStatusChange, order.id, order.status]
+    [isProcessing, onStatusChange, order.id]
   );
 
   const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
+
+  // Format countdown as M:SS
+  const countdownLabel =
+    autoExpireSeconds !== null && autoExpireSeconds > 0
+      ? `${Math.floor(autoExpireSeconds / 60)}:${String(autoExpireSeconds % 60).padStart(2, "0")}`
+      : null;
 
   return (
     <article
@@ -93,12 +171,27 @@ export default function SellerOrderCard({
             {buyerName}
           </span>
         </div>
-        <span
-          role="status"
-          className={`${badge.bg} ${badge.text} font-[family-name:var(--font-mono)] text-[10px] tracking-[1px] px-2.5 py-1 rounded-full`}
-        >
-          {badge.label}
-        </span>
+        <div className="flex items-center gap-2">
+          {/* Auto-expire countdown badge for pending orders */}
+          {order.status === "pending" && countdownLabel && (
+            <span
+              aria-label={`Auto-expires in ${countdownLabel}`}
+              className={`font-[family-name:var(--font-mono)] text-[10px] tracking-[1px] px-2 py-1 rounded-full ${
+                autoExpireSeconds !== null && autoExpireSeconds <= 60
+                  ? "bg-[#FDECEA] text-ketchup"
+                  : "bg-[#FFF3D6] text-[#8B6914]"
+              }`}
+            >
+              {countdownLabel}
+            </span>
+          )}
+          <span
+            role="status"
+            className={`${badge.bg} ${badge.text} font-[family-name:var(--font-mono)] text-[10px] tracking-[1px] px-2.5 py-1 rounded-full`}
+          >
+            {badge.label}
+          </span>
+        </div>
       </div>
 
       {/* Divider */}
@@ -146,7 +239,17 @@ export default function SellerOrderCard({
       {/* Divider */}
       <div className="border-t border-dashed border-[#ddd4c4] my-3" role="separator" />
 
-      {/* Action area */}
+      {/* Error message */}
+      {actionError && (
+        <div
+          role="alert"
+          className="bg-[#FDECEA] text-ketchup font-[family-name:var(--font-body)] text-[12px] px-3 py-2 rounded-[6px] mb-3"
+        >
+          {actionError}
+        </div>
+      )}
+
+      {/* Action area — buttons change based on current status */}
       {order.status === "pending" && (
         <div className="flex gap-3">
           <button
@@ -156,7 +259,7 @@ export default function SellerOrderCard({
             aria-label={`Accept order from ${buyerName}`}
             className="flex-1 min-h-[48px] bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] tracking-[1px] active:scale-[0.98] transition-transform focus:outline-none focus:ring-2 focus:ring-ketchup/20 disabled:opacity-60"
           >
-            ACCEPT
+            {isProcessing ? "..." : "ACCEPT"}
           </button>
           <button
             type="button"
@@ -179,7 +282,7 @@ export default function SellerOrderCard({
             aria-label={`Mark ${buyerName}'s order as started`}
             className="w-full min-h-[48px] bg-mustard text-chalkboard font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] tracking-[1px] active:scale-[0.98] transition-transform focus:outline-none focus:ring-2 focus:ring-mustard/30 disabled:opacity-60"
           >
-            STARTED ORDERING
+            {isProcessing ? "..." : "STARTED ORDERING"}
           </button>
           <p className="font-[family-name:var(--font-body)] text-[11px] text-sidewalk text-center mt-1.5">
             Tap when you&apos;ve placed their order at the counter.
@@ -196,10 +299,10 @@ export default function SellerOrderCard({
             aria-label={`Mark ${buyerName}'s order as ready`}
             className="w-full min-h-[48px] bg-mustard text-chalkboard font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] tracking-[1px] active:scale-[0.98] transition-transform focus:outline-none focus:ring-2 focus:ring-mustard/30 disabled:opacity-60"
           >
-            ORDER&apos;S READY
+            {isProcessing ? "..." : "ORDER'S READY"}
           </button>
           <p className="font-[family-name:var(--font-body)] text-[11px] text-sidewalk text-center mt-1.5">
-            Tap when you&apos;ve got the food in hand.
+            Tap when you&apos;ve got the food in hand. Payment will be captured.
           </p>
         </div>
       )}
@@ -213,12 +316,21 @@ export default function SellerOrderCard({
             aria-label={`Mark ${buyerName}'s order as handed off`}
             className="w-full min-h-[48px] bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] tracking-[1px] active:scale-[0.98] transition-transform focus:outline-none focus:ring-2 focus:ring-ketchup/20 disabled:opacity-60"
           >
-            HANDED OFF
+            {isProcessing ? "..." : "HANDED OFF"}
           </button>
           <p className="font-[family-name:var(--font-body)] text-[11px] text-sidewalk text-center mt-1.5">
             Tap once the buyer has their food.
           </p>
         </div>
+      )}
+
+      {/* Terminal states — no actions */}
+      {(order.status === "completed" || order.status === "cancelled") && (
+        <p className="font-[family-name:var(--font-mono)] text-[11px] text-sidewalk text-center">
+          {order.status === "completed"
+            ? "Order complete. Nice work."
+            : "Order was cancelled."}
+        </p>
       )}
 
       {/* Timestamp */}
