@@ -1,36 +1,29 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LineCut
 
-## Getting Started
+**Skip the line. Someone's already in it.**
 
-First, run the development server:
+LineCut is a peer-to-peer pickup app that connects people waiting in long restaurant lines with hungry customers who'd rather not. One person waits, the other pays — everyone eats.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## How It Works
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### If you're in line
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+You're already waiting — why not make it worth your while? Post your spot in line, set how many extra orders you can carry, pick up food for nearby customers, and earn a tip for your time.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### If you're hungry
 
-## Learn More
+Find someone already in line at the restaurant you're craving, place your order through them, and meet outside for the handoff. No waiting, no wondering — just food.
 
-To learn more about Next.js, take a look at the following resources:
+## The Problem
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The best food comes with the longest lines. Locals know the spots but skip them because who has the time. Tourists want the experience but can't justify a two-hour wait. LineCut turns waiting into a service — the person in line earns something for their time, and the person who's hungry gets fed without the wait.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Starting With
 
-## Deploy on Vercel
+**Katz's Delicatessen** — New York City
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+One iconic line. One city. Prove it works here, then everywhere.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Tech Stack
+
+Next.js 16 · React 19 · Supabase · Tailwind CSS v4 · TypeScript
