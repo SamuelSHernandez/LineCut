@@ -1,23 +1,30 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import type { Restaurant } from "@/lib/types";
-import { restaurants } from "@/lib/restaurants";
+import type { Restaurant, WaitTimeStats } from "@/lib/types";
 import { getDistanceMiles, formatDistance } from "@/lib/geo";
 import RestaurantCard from "./RestaurantCard";
 
 const RestaurantMap = dynamic(() => import("./RestaurantMap"), { ssr: false });
 
-export default function RestaurantBrowser() {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+interface RestaurantBrowserProps {
+  restaurants: Restaurant[];
+  waitStats: Record<string, WaitTimeStats>;
+}
+
+export default function RestaurantBrowser({
+  restaurants,
+  waitStats,
+}: RestaurantBrowserProps) {
+  const router = useRouter();
   const [userLocation, setUserLocation] = useState<{
     lat: number;
     lng: number;
   } | null>(null);
   const [search, setSearch] = useState("");
   const [activeCuisines, setActiveCuisines] = useState<Set<string>>(new Set());
-  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   useEffect(() => {
     navigator.geolocation.getCurrentPosition(
@@ -29,7 +36,7 @@ export default function RestaurantBrowser() {
 
   const allCuisines = useMemo(
     () => [...new Set(restaurants.flatMap((r) => r.cuisine))],
-    []
+    [restaurants]
   );
 
   const filteredRestaurants = useMemo(() => {
@@ -42,7 +49,7 @@ export default function RestaurantBrowser() {
         r.cuisine.some((c) => activeCuisines.has(c));
       return matchesSearch && matchesCuisine;
     });
-  }, [search, activeCuisines]);
+  }, [restaurants, search, activeCuisines]);
 
   function getDistance(r: Restaurant): string | null {
     if (!userLocation) return null;
@@ -56,9 +63,7 @@ export default function RestaurantBrowser() {
   }
 
   function handleSelectFromMap(id: string) {
-    setSelectedId(id);
-    const el = cardRefs.current.get(id);
-    el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    router.push(`/buyer/restaurant/${id}`);
   }
 
   function toggleCuisine(cuisine: string) {
@@ -116,19 +121,12 @@ export default function RestaurantBrowser() {
             </p>
           ) : (
             filteredRestaurants.map((r) => (
-              <div
+              <RestaurantCard
                 key={r.id}
-                ref={(el) => {
-                  if (el) cardRefs.current.set(r.id, el);
-                }}
-              >
-                <RestaurantCard
-                  restaurant={r}
-                  isSelected={selectedId === r.id}
-                  distance={getDistance(r)}
-                  onClick={() => setSelectedId(r.id)}
-                />
-              </div>
+                restaurant={r}
+                distance={getDistance(r)}
+                waitStats={waitStats[r.id]}
+              />
             ))
           )}
         </div>
@@ -137,7 +135,7 @@ export default function RestaurantBrowser() {
         <div className="md:w-[45%]">
           <RestaurantMap
             restaurants={filteredRestaurants}
-            selectedId={selectedId}
+            selectedId={null}
             onSelectRestaurant={handleSelectFromMap}
             userLocation={userLocation}
           />

@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import EmptyState from "@/components/EmptyState";
 import RestaurantBrowser from "@/components/buyer/RestaurantBrowser";
+import { fetchRestaurants } from "@/lib/restaurants";
+import { getWaitTimeStats } from "@/lib/wait-times";
 
 export default async function BuyerDashboard() {
   const supabase = await createClient();
@@ -24,6 +26,20 @@ export default async function BuyerDashboard() {
 
   const firstName = profile.display_name.split(" ")[0].toUpperCase();
 
+  const [restaurantList, waitStats] = await Promise.all([
+    fetchRestaurants(),
+    getWaitTimeStats(),
+  ]);
+
+  // Serialize waitStats map to plain object for client component
+  const waitStatsObj: Record<
+    string,
+    { restaurantId: string; avgWaitMinutes: number; reportCount: number; activeSellers: number }
+  > = {};
+  for (const [key, value] of waitStats) {
+    waitStatsObj[key] = value;
+  }
+
   return (
     <div className="space-y-8">
       {/* Welcome */}
@@ -39,7 +55,7 @@ export default async function BuyerDashboard() {
       </div>
 
       {/* Restaurant Browser */}
-      <RestaurantBrowser />
+      <RestaurantBrowser restaurants={restaurantList} waitStats={waitStatsObj} />
 
       {/* Your Orders */}
       <div>
