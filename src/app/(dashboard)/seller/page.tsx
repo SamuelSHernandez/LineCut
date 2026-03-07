@@ -1,9 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import PlaceholderCard from "@/components/PlaceholderCard";
-import EmptyState from "@/components/EmptyState";
 import GoLivePanel from "@/components/seller/GoLivePanel";
+import SellerOrderManager from "@/components/seller/SellerOrderManager";
 import { fetchRestaurants } from "@/lib/restaurants";
 import type { SellerSession } from "@/lib/types";
 
@@ -17,12 +16,20 @@ export default async function SellerDashboard() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("display_name, is_buyer, is_seller, trust_score")
+    .select("display_name, is_buyer, is_seller, trust_score, stripe_connect_status")
     .eq("id", user.id)
     .single();
 
-  if (!profile?.is_seller) {
-    redirect("/buyer");
+  if (!profile) {
+    redirect("/auth/login");
+  }
+
+  if (!profile.is_seller) {
+    // Only redirect if user is a buyer — avoid redirect loops
+    if (profile.is_buyer) {
+      redirect("/buyer");
+    }
+    redirect("/auth/login");
   }
 
   const firstName = profile.display_name.split(" ")[0].toUpperCase();
@@ -50,10 +57,10 @@ export default async function SellerDashboard() {
     : null;
 
   return (
-    <div className="space-y-8">
+    <main className="space-y-8">
       {/* Welcome */}
       <div>
-        <h1 className="font-[family-name:var(--font-display)] text-[32px] tracking-[2px] leading-none mb-2">
+        <h1 className="font-[family-name:var(--font-display)] text-[32px] tracking-[2px] leading-none text-chalkboard mb-2">
           HEY, {firstName}.
         </h1>
         <p className="font-[family-name:var(--font-body)] text-[15px] text-sidewalk">
@@ -64,53 +71,27 @@ export default async function SellerDashboard() {
       </div>
 
       {/* Go Live */}
-      <GoLivePanel restaurants={restaurantList} activeSession={activeSession} />
+      <GoLivePanel
+        restaurants={restaurantList}
+        activeSession={activeSession}
+        stripeConnectStatus={profile.stripe_connect_status ?? "not_connected"}
+      />
 
-      {/* Earnings */}
-      <PlaceholderCard title="YOUR EARNINGS">
-        <div className="grid grid-cols-3 gap-4">
-          {["Today", "This Week", "All Time"].map((period) => (
-            <div key={period} className="text-center">
-              <p className="font-[family-name:var(--font-mono)] text-[11px] tracking-[2px] uppercase text-sidewalk mb-1">
-                {period}
-              </p>
-              <p className="font-[family-name:var(--font-display)] text-[24px] tracking-[1px]">
-                $0.00
-              </p>
-            </div>
-          ))}
-        </div>
-      </PlaceholderCard>
-
-      {/* Active Orders */}
-      <div>
-        <h2 className="font-[family-name:var(--font-display)] text-[22px] tracking-[1px] mb-3">
-          ACTIVE ORDERS
-        </h2>
-        <div className="bg-ticket rounded-[10px] border border-[#eee6d8]">
-          <EmptyState message="No active orders. Go live to start accepting orders." />
-        </div>
-      </div>
-
-      {/* Past Handoffs */}
-      <div>
-        <h2 className="font-[family-name:var(--font-display)] text-[22px] tracking-[1px] mb-3">
-          PAST HANDOFFS
-        </h2>
-        <div className="bg-ticket rounded-[10px] border border-[#eee6d8]">
-          <EmptyState message="No handoffs yet. Your completed orders will show up here." />
-        </div>
-      </div>
+      {/* Order Management */}
+      <SellerOrderManager
+        activeSession={activeSession}
+        restaurantId={activeSession?.restaurantId ?? null}
+      />
 
       {/* Onboarding link */}
       <div className="text-center">
         <Link
           href="/onboarding/seller"
-          className="font-[family-name:var(--font-body)] text-[13px] text-sidewalk hover:text-chalkboard transition-colors underline underline-offset-2"
+          className="inline-block min-h-[44px] leading-[44px] font-[family-name:var(--font-body)] text-[13px] text-sidewalk hover:text-chalkboard transition-colors underline underline-offset-2"
         >
           Forgot how this works?
         </Link>
       </div>
-    </div>
+    </main>
   );
 }

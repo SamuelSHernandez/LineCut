@@ -1,10 +1,19 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import type { Seller, MenuItem, OrderItem } from "@/lib/types";
+import { useRouter } from "next/navigation";
+import type { Seller, MenuItem, OrderItem, Order } from "@/lib/types";
+import { useProfile } from "@/lib/profile-context";
+import { useOrders } from "@/lib/order-context";
+import { checkBillingReady } from "@/lib/billing-gate";
+import { placeOrder } from "@/app/(dashboard)/buyer/actions";
+import { calculatePlatformFee } from "./OrderConfirmation";
 import MenuItemPill from "./MenuItemPill";
 import OrderConfirmation from "./OrderConfirmation";
-import OrderPendingState from "./OrderPendingState";
+import OrderTracker from "./OrderTracker";
+import StripePaymentForm from "./StripePaymentForm";
+
+type DrawerStep = "build" | "payment" | "tracking";
 
 interface OrderDrawerProps {
   seller: Seller;
@@ -23,16 +32,31 @@ export default function OrderDrawer({
     new Map()
   );
   const [specialInstructions, setSpecialInstructions] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+  const [step, setStep] = useState<DrawerStep>("build");
   const [showMore, setShowMore] = useState(false);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [orderId, setOrderId] = useState<string | null>(null);
+  const [trackedOrder, setTrackedOrder] = useState<Order | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [placing, setPlacing] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const profile = useProfile();
+  const { placeOrder: placeOrderContext, cancelOrder, orders } = useOrders();
+  const router = useRouter();
 
   const popularItems = menuItems.filter((m) => m.popular);
   const moreItems = menuItems.filter((m) => !m.popular);
 
   const orderItemsArray = Array.from(orderItems.values());
   const hasItems = orderItemsArray.length > 0;
+
+  const itemsSubtotal = orderItemsArray.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
+  const platformFee = calculatePlatformFee(itemsSubtotal);
+  const total = itemsSubtotal + seller.fee + platformFee;
 
   // Focus trap and keyboard handling
   const handleKeyDown = useCallback(
@@ -65,9 +89,7 @@ export default function OrderDrawer({
 
   useEffect(() => {
     document.addEventListener("keydown", handleKeyDown);
-    // Focus the close button on mount
     closeButtonRef.current?.focus();
-    // Prevent body scroll while drawer is open
     document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
@@ -84,7 +106,7 @@ export default function OrderDrawer({
         next.set(item.id, {
           menuItemId: item.id,
           name: item.name,
-          priceEstimate: item.priceEstimate,
+          price: item.price,
           quantity: 1,
         });
       }
@@ -118,14 +140,88 @@ export default function OrderDrawer({
     });
   }
 
-  function handleConfirm() {
-    setSubmitted(true);
+  async function handleConfirm() {
+    // Check billing gate before placing order
+    const billing = checkBillingReady(profile, "buyer");
+    if (!billing.ready && billing.redirectUrl) {
+      router.push(billing.redirectUrl);
+      return;
+    }
+
+    setPlacing(true);
+    setError(null);
+
+    const result = await placeOrder({
+      sellerId: seller.id,
+      restaurantId: seller.restaurantId,
+      items: orderItemsArray.map((item) => ({
+        menuItemId: item.menuItemId,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+      })),
+      specialInstructions,
+      sellerFee: seller.fee,
+    });
+
+    setPlacing(false);
+
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+
+    if (result.clientSecret && result.orderId) {
+      setClientSecret(result.clientSecret);
+      setOrderId(result.orderId);
+      setStep("payment");
+    }
+  }
+
+  function handlePaymentSuccess() {
+    // Build full Order object and publish via context/bus
+    const now = new Date().toISOString();
+    const fullOrder: Order = {
+      id: orderId ?? crypto.randomUUID(),
+      buyerId: profile.id,
+      sellerId: seller.id,
+      restaurantId: seller.restaurantId,
+      items: orderItemsArray.map((item) => ({
+        menuItemId: item.menuItemId,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+      })),
+      specialInstructions,
+      status: "pending",
+      itemsSubtotal,
+      sellerFee: seller.fee,
+      platformFee,
+      total,
+      stripePaymentIntentId: null,
+      createdAt: now,
+      statusUpdatedAt: now,
+      restaurantName,
+      sellerName: `${seller.firstName} ${seller.lastInitial}.`,
+      buyerName: profile.displayName,
+    };
+
+    placeOrderContext(fullOrder);
+    setTrackedOrder(fullOrder);
+    setStep("tracking");
+  }
+
+  function handlePaymentError(message: string) {
+    setError(message);
   }
 
   function handleCancel() {
-    setSubmitted(false);
+    setStep("build");
+    setClientSecret(null);
+    setOrderId(null);
     setOrderItems(new Map());
     setSpecialInstructions("");
+    setError(null);
     onClose();
   }
 
@@ -150,8 +246,12 @@ export default function OrderDrawer({
           {/* Header */}
           <div className="flex items-start justify-between mb-4">
             <div>
-              <h3 className="font-[family-name:var(--font-display)] text-[22px] tracking-[1px]">
-                YOUR ORDER
+              <h3 className="font-[family-name:var(--font-display)] text-[22px] tracking-[1px] text-chalkboard">
+                {step === "payment"
+                  ? "PAYMENT"
+                  : step === "tracking"
+                    ? "ORDER TRACKER"
+                    : "YOUR ORDER"}
               </h3>
               <p className="font-[family-name:var(--font-body)] text-[13px] text-sidewalk">
                 Through {seller.firstName} at {restaurantName}
@@ -161,7 +261,7 @@ export default function OrderDrawer({
               ref={closeButtonRef}
               type="button"
               onClick={onClose}
-              className="w-11 h-11 flex items-center justify-center text-sidewalk hover:text-chalkboard transition-colors rounded-[6px]"
+              className="w-11 h-11 flex items-center justify-center text-sidewalk hover:text-chalkboard transition-colors rounded-[6px] focus:outline-none focus:ring-2 focus:ring-ketchup/20"
               aria-label="Close order drawer"
             >
               <svg
@@ -179,12 +279,35 @@ export default function OrderDrawer({
             </button>
           </div>
 
-          {submitted ? (
-            <OrderPendingState
-              sellerName={seller.firstName}
-              positionInLine={seller.positionInLine}
-              onCancel={handleCancel}
+          {/* Error display */}
+          {error && (
+            <div className="mb-4 p-3 bg-[#FDECEA] rounded-[6px]" role="alert">
+              <p className="font-[family-name:var(--font-body)] text-[13px] text-ketchup">
+                {error}
+              </p>
+            </div>
+          )}
+
+          {step === "tracking" && trackedOrder ? (
+            <OrderTracker
+              order={orders.find((o) => o.id === trackedOrder.id) ?? trackedOrder}
+              onCancel={() => {
+                cancelOrder(trackedOrder.id, "buyer");
+                handleCancel();
+              }}
             />
+          ) : step === "payment" && clientSecret ? (
+            <div>
+              <p className="font-[family-name:var(--font-body)] text-[13px] text-sidewalk mb-4">
+                Enter your payment details. Your card will be authorized for ${total.toFixed(2)} and charged when your order is ready.
+              </p>
+              <StripePaymentForm
+                clientSecret={clientSecret}
+                total={total}
+                onSuccess={handlePaymentSuccess}
+                onError={handlePaymentError}
+              />
+            </div>
           ) : (
             <>
               {/* Popular Items */}
@@ -213,7 +336,7 @@ export default function OrderDrawer({
                     <button
                       type="button"
                       onClick={() => setShowMore(true)}
-                      className="font-[family-name:var(--font-body)] text-[13px] text-ketchup font-semibold hover:text-ketchup/80 transition-colors"
+                      className="min-h-[44px] font-[family-name:var(--font-body)] text-[13px] text-ketchup font-semibold hover:text-ketchup/80 transition-colors"
                     >
                       Show more items
                     </button>
@@ -252,7 +375,8 @@ export default function OrderDrawer({
                   onChange={(e) => setSpecialInstructions(e.target.value)}
                   placeholder="Extra mustard, no pickles, etc."
                   rows={2}
-                  className="w-full bg-butcher-paper rounded-[6px] border border-[#ddd4c4] px-3 py-2 font-[family-name:var(--font-body)] text-[13px] text-chalkboard placeholder:text-sidewalk focus:outline-none focus:border-ketchup transition-colors resize-none"
+                  aria-label="Special instructions for your order"
+                  className="w-full bg-butcher-paper rounded-[6px] border border-[#ddd4c4] px-3 py-2 font-[family-name:var(--font-body)] text-[13px] text-chalkboard placeholder:text-sidewalk focus:outline-none focus:border-ketchup focus:ring-2 focus:ring-ketchup/20 transition-colors resize-none"
                 />
               </div>
 
@@ -266,7 +390,7 @@ export default function OrderDrawer({
                   sellerName={seller.firstName}
                   sellerFee={seller.fee}
                   onConfirm={handleConfirm}
-                  disabled={false}
+                  disabled={placing}
                 />
               ) : (
                 <p className="font-[family-name:var(--font-body)] text-[13px] text-sidewalk text-center py-4">

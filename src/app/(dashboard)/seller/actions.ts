@@ -11,6 +11,17 @@ export async function goLive(restaurantId: string) {
 
   if (!user) redirect("/auth/login");
 
+  // Check billing gate — seller must have active Stripe Connect
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("stripe_connect_status")
+    .eq("id", user.id)
+    .single();
+
+  if (profile?.stripe_connect_status !== "active") {
+    return { error: "billing_gate", redirectUrl: "/profile?gate=seller#payouts" };
+  }
+
   // Check for existing active session
   const { data: existing } = await supabase
     .from("seller_sessions")

@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import EmptyState from "@/components/EmptyState";
 import RestaurantBrowser from "@/components/buyer/RestaurantBrowser";
+import BuyerOrdersSection from "@/components/buyer/BuyerOrdersSection";
 import { fetchRestaurants } from "@/lib/restaurants";
 import { getWaitTimeStats } from "@/lib/wait-times";
 
@@ -20,8 +20,16 @@ export default async function BuyerDashboard() {
     .eq("id", user.id)
     .single();
 
-  if (!profile?.is_buyer) {
-    redirect("/seller");
+  if (!profile) {
+    redirect("/auth/login");
+  }
+
+  if (!profile.is_buyer) {
+    // Only redirect if user is a seller — avoid redirect loops
+    if (profile.is_seller) {
+      redirect("/seller");
+    }
+    redirect("/auth/login");
   }
 
   const firstName = profile.display_name.split(" ")[0].toUpperCase();
@@ -62,9 +70,7 @@ export default async function BuyerDashboard() {
         <h2 className="font-[family-name:var(--font-display)] text-[22px] tracking-[1px] mb-3">
           YOUR ORDERS
         </h2>
-        <div className="bg-ticket rounded-[10px] border border-[#eee6d8]">
-          <EmptyState message="No orders yet. Find someone in line and place your first order." />
-        </div>
+        <BuyerOrdersSection />
       </div>
 
       {/* Onboarding link */}

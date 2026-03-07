@@ -89,7 +89,8 @@ export default function RestaurantBrowser({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search restaurants near you..."
-          className="w-full h-10 bg-butcher-paper rounded-[6px] border border-[#ddd4c4] px-3 font-[family-name:var(--font-body)] text-[13px] text-chalkboard placeholder:text-sidewalk focus:outline-none focus:border-ketchup transition-colors"
+          aria-label="Search restaurants"
+          className="w-full h-11 bg-butcher-paper rounded-[6px] border border-[#ddd4c4] px-3 font-[family-name:var(--font-body)] text-[13px] text-chalkboard placeholder:text-sidewalk focus:outline-none focus:border-ketchup focus:ring-2 focus:ring-ketchup/20 transition-colors"
         />
       </div>
 
@@ -100,7 +101,8 @@ export default function RestaurantBrowser({
             key={c}
             type="button"
             onClick={() => toggleCuisine(c)}
-            className={`px-3 py-1 rounded-full font-[family-name:var(--font-body)] text-[12px] transition-colors ${
+            aria-pressed={activeCuisines.has(c)}
+            className={`px-3 py-2 min-h-[44px] rounded-full font-[family-name:var(--font-body)] text-[12px] transition-colors ${
               activeCuisines.has(c)
                 ? "bg-ketchup text-ticket border border-ketchup"
                 : "bg-butcher-paper border border-[#ddd4c4] text-sidewalk hover:border-ketchup hover:text-ketchup"

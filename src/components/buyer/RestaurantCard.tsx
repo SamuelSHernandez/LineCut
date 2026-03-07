@@ -31,7 +31,7 @@ export default function RestaurantCard({
         </span>
         {distance && (
           <>
-            <span className="text-[#ddd4c4]">|</span>
+            <span className="text-sidewalk" aria-hidden="true">|</span>
             <span className="font-[family-name:var(--font-mono)] text-[11px] tracking-[1px] text-sidewalk">
               {distance}
             </span>

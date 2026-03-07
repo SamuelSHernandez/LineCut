@@ -54,14 +54,27 @@ export default function DashboardNav() {
 
       {/* Right: Avatar + name + logout */}
       <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-full bg-mustard flex items-center justify-center">
-          <span className="font-[family-name:var(--font-display)] text-[14px] text-chalkboard leading-none">
-            {initials}
+        <Link
+          href="/profile"
+          className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+        >
+          <div className="w-9 h-9 rounded-full bg-mustard flex items-center justify-center overflow-hidden">
+            {profile.avatarUrl ? (
+              <img
+                src={profile.avatarUrl}
+                alt={profile.displayName}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span className="font-[family-name:var(--font-display)] text-[14px] text-chalkboard leading-none">
+                {initials}
+              </span>
+            )}
+          </div>
+          <span className="font-[family-name:var(--font-body)] text-[13px] text-chalkboard hidden sm:inline">
+            {profile.displayName}
           </span>
-        </div>
-        <span className="font-[family-name:var(--font-body)] text-[13px] text-chalkboard hidden sm:inline">
-          {profile.displayName}
-        </span>
+        </Link>
         <form action={logout}>
           <button
             type="submit"

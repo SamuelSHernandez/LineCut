@@ -10,10 +10,12 @@ interface OrderConfirmationProps {
   disabled: boolean;
 }
 
-function calculatePlatformFee(itemsEstimate: number): number {
-  const fee = itemsEstimate * 0.15;
+export function calculatePlatformFee(itemsSubtotal: number): number {
+  const fee = itemsSubtotal * 0.15;
   return Math.min(Math.max(fee, 1.0), 8.0);
 }
+
+const ORDER_MAX = 50;
 
 export default function OrderConfirmation({
   items,
@@ -22,27 +24,29 @@ export default function OrderConfirmation({
   onConfirm,
   disabled,
 }: OrderConfirmationProps) {
-  const itemsEstimate = items.reduce(
-    (sum, item) => sum + item.priceEstimate * item.quantity,
+  const itemsSubtotal = items.reduce(
+    (sum, item) => sum + item.price * item.quantity,
     0
   );
-  const platformFee = calculatePlatformFee(itemsEstimate);
-  const total = itemsEstimate + sellerFee + platformFee;
+  const platformFee = calculatePlatformFee(itemsSubtotal);
+  const total = itemsSubtotal + sellerFee + platformFee;
+  const overCap = total > ORDER_MAX;
 
   return (
     <div>
       {/* Line items */}
-      <div className="space-y-2 mb-3">
+      <div className="space-y-2 mb-3" role="list" aria-label="Order items">
         {items.map((item) => (
           <div
             key={item.menuItemId}
+            role="listitem"
             className="flex items-center justify-between font-[family-name:var(--font-body)] text-[13px]"
           >
             <span className="text-chalkboard">
               {item.name} x{item.quantity}
             </span>
             <span className="text-sidewalk font-[family-name:var(--font-mono)] text-[12px]">
-              ${(item.priceEstimate * item.quantity).toFixed(2)}
+              ${(item.price * item.quantity).toFixed(2)}
             </span>
           </div>
         ))}
@@ -54,9 +58,9 @@ export default function OrderConfirmation({
       {/* Subtotals */}
       <div className="space-y-2 mb-3">
         <div className="flex items-center justify-between font-[family-name:var(--font-body)] text-[13px]">
-          <span className="text-sidewalk">Items estimate</span>
+          <span className="text-sidewalk">Items</span>
           <span className="text-chalkboard font-[family-name:var(--font-mono)] text-[12px]">
-            ${itemsEstimate.toFixed(2)}
+            ${itemsSubtotal.toFixed(2)}
           </span>
         </div>
         <div className="flex items-center justify-between font-[family-name:var(--font-body)] text-[13px]">
@@ -77,7 +81,7 @@ export default function OrderConfirmation({
       <div className="border-t border-[#ddd4c4] my-3" />
 
       {/* Total */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4" aria-live="polite">
         <span className="font-[family-name:var(--font-display)] text-[18px] tracking-[1px]">
           TOTAL
         </span>
@@ -86,19 +90,26 @@ export default function OrderConfirmation({
         </span>
       </div>
 
+      {/* $50 cap warning */}
+      {overCap && (
+        <p className="text-center font-[family-name:var(--font-body)] text-[13px] text-ketchup font-semibold mb-3">
+          Orders are capped at ${ORDER_MAX}. Remove some items to continue.
+        </p>
+      )}
+
       {/* Confirm button */}
       <button
         type="button"
         onClick={onConfirm}
-        disabled={disabled}
-        className="w-full py-3 px-6 bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] transition-all duration-200 hover:bg-ketchup/90 disabled:opacity-50 disabled:cursor-not-allowed"
+        disabled={disabled || overCap}
+        className="w-full min-h-[48px] py-3 px-6 bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] transition-all duration-200 hover:bg-ketchup/90 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         PLACE ORDER &mdash; ${total.toFixed(2)}
       </button>
 
       {/* Caption */}
       <p className="text-center font-[family-name:var(--font-body)] text-[11px] text-sidewalk mt-2">
-        Prices are estimates. Final amount may vary.
+        Your card will be authorized now and charged when your order is ready.
       </p>
     </div>
   );

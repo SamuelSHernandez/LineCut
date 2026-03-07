@@ -1,0 +1,309 @@
+"use server";
+
+import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+import { stripe } from "@/lib/stripe";
+
+export type ProfileActionState = {
+  error: string | null;
+  success?: boolean;
+};
+
+export async function updateProfile(
+  _prevState: ProfileActionState,
+  formData: FormData
+): Promise<ProfileActionState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/auth/login");
+
+  const displayName = formData.get("displayName") as string;
+  const phone = formData.get("phone") as string | null;
+  const bio = formData.get("bio") as string | null;
+  const neighborhood = formData.get("neighborhood") as string | null;
+
+  if (!displayName?.trim()) {
+    return { error: "Display name is required." };
+  }
+
+  if (bio && bio.length > 160) {
+    return { error: "Bio must be 160 characters or less." };
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      display_name: displayName.trim(),
+      phone: phone?.trim() || null,
+      bio: bio?.trim() || null,
+      neighborhood: neighborhood?.trim() || null,
+    })
+    .eq("id", user.id);
+
+  if (error) {
+    return { error: "Failed to update profile. Please try again." };
+  }
+
+  revalidatePath("/profile", "layout");
+  return { error: null, success: true };
+}
+
+export async function toggleRole(role: "buyer" | "seller", enable: boolean) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/auth/login");
+
+  // Fetch current profile to enforce at-least-one-role
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("is_buyer, is_seller")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile) {
+    return { error: "Profile not found." };
+  }
+
+  // Prevent removing the last role
+  if (!enable) {
+    const otherRole = role === "buyer" ? profile.is_seller : profile.is_buyer;
+    if (!otherRole) {
+      return { error: "You must have at least one role." };
+    }
+  }
+
+  const update =
+    role === "buyer" ? { is_buyer: enable } : { is_seller: enable };
+
+  const { error } = await supabase
+    .from("profiles")
+    .update(update)
+    .eq("id", user.id);
+
+  if (error) {
+    return { error: "Failed to update role. Please try again." };
+  }
+
+  revalidatePath("/profile", "layout");
+  return { success: true };
+}
+
+export async function createSetupIntent() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/auth/login");
+
+  // Get or create Stripe customer
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("stripe_customer_id, display_name")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile) {
+    return { error: "Profile not found." };
+  }
+
+  let customerId = profile.stripe_customer_id;
+
+  if (!customerId) {
+    const customer = await stripe.customers.create({
+      email: user.email,
+      name: profile.display_name,
+      metadata: { supabase_user_id: user.id },
+    });
+    customerId = customer.id;
+
+    await supabase
+      .from("profiles")
+      .update({ stripe_customer_id: customerId })
+      .eq("id", user.id);
+  }
+
+  const setupIntent = await stripe.setupIntents.create({
+    customer: customerId,
+    payment_method_types: ["card"],
+    metadata: { supabase_user_id: user.id },
+  });
+
+  return { clientSecret: setupIntent.client_secret };
+}
+
+export async function detachPaymentMethod() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/auth/login");
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("stripe_customer_id")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile?.stripe_customer_id) {
+    return { error: "No payment method on file." };
+  }
+
+  // List and detach all payment methods
+  const paymentMethods = await stripe.paymentMethods.list({
+    customer: profile.stripe_customer_id,
+    type: "card",
+  });
+
+  for (const pm of paymentMethods.data) {
+    await stripe.paymentMethods.detach(pm.id);
+  }
+
+  await supabase
+    .from("profiles")
+    .update({
+      payment_method_last4: null,
+      payment_method_brand: null,
+      payment_method_exp_month: null,
+      payment_method_exp_year: null,
+    })
+    .eq("id", user.id);
+
+  revalidatePath("/profile", "layout");
+  return { success: true };
+}
+
+export async function createConnectAccount() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/auth/login");
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("stripe_connect_account_id, display_name")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile) {
+    return { error: "Profile not found." };
+  }
+
+  let accountId = profile.stripe_connect_account_id;
+
+  if (!accountId) {
+    const account = await stripe.accounts.create({
+      type: "express",
+      email: user.email,
+      metadata: { supabase_user_id: user.id },
+      capabilities: {
+        card_payments: { requested: true },
+        transfers: { requested: true },
+      },
+    });
+    accountId = account.id;
+
+    await supabase
+      .from("profiles")
+      .update({
+        stripe_connect_account_id: accountId,
+        stripe_connect_status: "pending",
+      })
+      .eq("id", user.id);
+  }
+
+  const appOrigin =
+    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+  const accountLink = await stripe.accountLinks.create({
+    account: accountId,
+    refresh_url: `${appOrigin}/api/stripe/connect/refresh`,
+    return_url: `${appOrigin}/api/stripe/connect/return`,
+    type: "account_onboarding",
+  });
+
+  return { url: accountLink.url };
+}
+
+export async function createConnectLoginLink() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/auth/login");
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("stripe_connect_account_id")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile?.stripe_connect_account_id) {
+    return { error: "No connected account found." };
+  }
+
+  const loginLink = await stripe.accounts.createLoginLink(
+    profile.stripe_connect_account_id
+  );
+
+  return { url: loginLink.url };
+}
+
+export async function uploadAvatar(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/auth/login");
+
+  const file = formData.get("avatar") as File;
+  if (!file || file.size === 0) {
+    return { error: "No file provided." };
+  }
+
+  if (file.size > 2 * 1024 * 1024) {
+    return { error: "File must be under 2MB." };
+  }
+
+  if (!file.type.startsWith("image/")) {
+    return { error: "File must be an image." };
+  }
+
+  const ext = file.name.split(".").pop() || "jpg";
+  const filePath = `${user.id}/avatar.${ext}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("avatars")
+    .upload(filePath, file, { upsert: true, contentType: file.type });
+
+  if (uploadError) {
+    return { error: "Failed to upload avatar. Please try again." };
+  }
+
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from("avatars").getPublicUrl(filePath);
+
+  // Add cache-bust query param
+  const avatarUrl = `${publicUrl}?v=${Date.now()}`;
+
+  await supabase
+    .from("profiles")
+    .update({ avatar_url: avatarUrl })
+    .eq("id", user.id);
+
+  revalidatePath("/profile", "layout");
+  return { success: true, avatarUrl };
+}

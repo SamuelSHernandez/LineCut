@@ -3,8 +3,7 @@ import Link from "next/link";
 import { restaurants } from "@/lib/restaurants";
 import { getSellersByRestaurant } from "@/lib/sellers";
 import { getMenuItemsByRestaurant } from "@/lib/menu-items";
-import SellerList from "@/components/buyer/SellerList";
-import EmptyState from "@/components/EmptyState";
+import RestaurantLiveSection from "@/components/buyer/RestaurantLiveSection";
 
 interface RestaurantDetailPageProps {
   params: Promise<{ id: string }>;
@@ -23,7 +22,7 @@ export default async function RestaurantDetailPage({
   const sellers = getSellersByRestaurant(id);
   const menuItems = getMenuItemsByRestaurant(id);
 
-  // Compute stats from sellers
+  // Compute stats from hardcoded sellers for the header
   const availableSellers = sellers.filter((s) => s.status === "available");
   const waitEstimates = availableSellers.map((s) => s.waitEstimate);
   const fees = availableSellers.map((s) => s.fee);
@@ -45,7 +44,7 @@ export default async function RestaurantDetailPage({
       {/* Back Navigation */}
       <Link
         href="/buyer"
-        className="inline-flex items-center gap-1.5 font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[2px] text-sidewalk hover:text-chalkboard transition-colors"
+        className="inline-flex items-center gap-1.5 min-h-[44px] py-2 font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[2px] text-sidewalk hover:text-chalkboard transition-colors"
       >
         <svg
           width="14"
@@ -100,37 +99,12 @@ export default async function RestaurantDetailPage({
         </div>
       </div>
 
-      {/* Who's In Line */}
-      <div>
-        <h2 className="font-[family-name:var(--font-display)] text-[22px] tracking-[1px] mb-1">
-          WHO&apos;S IN LINE
-        </h2>
-        <p className="font-[family-name:var(--font-body)] text-[13px] text-sidewalk mb-4">
-          Tap a seller to start your order.
-        </p>
-
-        {sellers.length > 0 ? (
-          <SellerList
-            sellers={sellers}
-            menuItems={menuItems}
-            restaurantName={restaurant.name}
-          />
-        ) : (
-          <div className="bg-ticket rounded-[10px] border border-[#eee6d8]">
-            <EmptyState message="Nobody's in line right now. Check back at lunch." />
-          </div>
-        )}
-      </div>
-
-      {/* Your Orders */}
-      <div>
-        <h2 className="font-[family-name:var(--font-display)] text-[22px] tracking-[1px] mb-3">
-          YOUR ORDERS
-        </h2>
-        <div className="bg-ticket rounded-[10px] border border-[#eee6d8]">
-          <EmptyState message="No orders yet. Pick someone above and place your first order." />
-        </div>
-      </div>
+      {/* Live sellers + orders — client component */}
+      <RestaurantLiveSection
+        restaurantId={id}
+        restaurantName={restaurant.name}
+        menuItems={menuItems}
+      />
     </div>
   );
 }

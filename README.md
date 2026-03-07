@@ -1,8 +1,16 @@
-# LineCut
+<p align="center">
+  <img src="public/logo.png" alt="LineCut Logo" width="500" />
+</p>
 
-**Skip the line. Someone's already in it.**
+<p align="center"><strong>Skip the line. Someone's already in it.</strong></p>
+
+---
 
 LineCut is a peer-to-peer pickup app that connects people waiting in long restaurant lines with hungry customers who'd rather not. One person waits, the other pays — everyone eats.
+
+<p align="center">
+  <img src="public/hero.png" alt="LineCut Hero — Katz's Delicatessen" width="700" />
+</p>
 
 ## How It Works
 

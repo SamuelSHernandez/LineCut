@@ -45,14 +45,14 @@ export interface MenuItem {
   id: string;
   restaurantId: string;
   name: string;
-  priceEstimate: number;
+  price: number;
   popular: boolean;
 }
 
 export interface OrderItem {
   menuItemId: string;
   name: string;
-  priceEstimate: number;
+  price: number;
   quantity: number;
 }
 
@@ -72,9 +72,25 @@ export interface Order {
   items: OrderItem[];
   specialInstructions: string;
   status: OrderStatus;
-  itemsEstimate: number;
+  itemsSubtotal: number;
   sellerFee: number;
   platformFee: number;
   total: number;
+  stripePaymentIntentId: string | null;
   createdAt: string;
+  statusUpdatedAt: string;
+  restaurantName: string;
+  sellerName: string;
+  buyerName: string;
+}
+
+export interface PayoutAccount {
+  id: string;
+  userId: string;
+  stripeAccountId: string;
+  status: "pending" | "active" | "revoked";
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
 }

@@ -9,6 +9,18 @@ export type Profile = {
   isSeller: boolean;
   avatarUrl: string | null;
   trustScore: number;
+  phone: string | null;
+  bio: string | null;
+  neighborhood: string | null;
+  phoneVerified: boolean;
+  stripeCustomerId: string | null;
+  stripeConnectAccountId: string | null;
+  stripeConnectStatus: "not_connected" | "pending" | "active" | "restricted";
+  paymentMethodLast4: string | null;
+  paymentMethodBrand: string | null;
+  paymentMethodExpMonth: number | null;
+  paymentMethodExpYear: number | null;
+  createdAt: string;
 };
 
 const ProfileContext = createContext<Profile | null>(null);

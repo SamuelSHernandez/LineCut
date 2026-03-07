@@ -19,7 +19,7 @@ export default async function DashboardLayout({
 
   const { data: row } = await supabase
     .from("profiles")
-    .select("id, display_name, is_buyer, is_seller, avatar_url, trust_score")
+    .select("id, display_name, is_buyer, is_seller, avatar_url, trust_score, phone, bio, neighborhood, phone_verified, stripe_customer_id, stripe_connect_account_id, stripe_connect_status, payment_method_last4, payment_method_brand, payment_method_exp_month, payment_method_exp_year, created_at")
     .eq("id", user.id)
     .single();
 
@@ -32,6 +32,18 @@ export default async function DashboardLayout({
         isSeller: row.is_seller,
         avatarUrl: row.avatar_url,
         trustScore: row.trust_score,
+        phone: row.phone,
+        bio: row.bio,
+        neighborhood: row.neighborhood,
+        phoneVerified: row.phone_verified,
+        stripeCustomerId: row.stripe_customer_id,
+        stripeConnectAccountId: row.stripe_connect_account_id,
+        stripeConnectStatus: row.stripe_connect_status,
+        paymentMethodLast4: row.payment_method_last4,
+        paymentMethodBrand: row.payment_method_brand,
+        paymentMethodExpMonth: row.payment_method_exp_month,
+        paymentMethodExpYear: row.payment_method_exp_year,
+        createdAt: row.created_at,
       }
     : {
         id: user.id,
@@ -41,6 +53,18 @@ export default async function DashboardLayout({
         isSeller: (user.user_metadata?.is_seller as boolean) ?? false,
         avatarUrl: null,
         trustScore: 0,
+        phone: null,
+        bio: null,
+        neighborhood: null,
+        phoneVerified: false,
+        stripeCustomerId: null,
+        stripeConnectAccountId: null,
+        stripeConnectStatus: "not_connected",
+        paymentMethodLast4: null,
+        paymentMethodBrand: null,
+        paymentMethodExpMonth: null,
+        paymentMethodExpYear: null,
+        createdAt: new Date().toISOString(),
       };
 
   return <DashboardShell profile={profile}>{children}</DashboardShell>;

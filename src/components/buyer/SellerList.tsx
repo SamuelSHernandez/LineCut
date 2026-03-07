@@ -26,7 +26,9 @@ export default function SellerList({
       // Already selected -- open the drawer
       setDrawerOpen(true);
     } else {
+      // Select and immediately open the drawer for faster flow
       setSelectedSellerId(sellerId);
+      setDrawerOpen(true);
     }
   }
 
@@ -36,14 +38,15 @@ export default function SellerList({
 
   return (
     <>
-      <div className="space-y-4">
+      <div className="space-y-4" role="list" aria-label="Available sellers">
         {sellers.map((seller) => (
-          <SellerCard
-            key={seller.id}
-            seller={seller}
-            isSelected={selectedSellerId === seller.id}
-            onSelect={() => handleSelect(seller.id)}
-          />
+          <div key={seller.id} role="listitem">
+            <SellerCard
+              seller={seller}
+              isSelected={selectedSellerId === seller.id}
+              onSelect={() => handleSelect(seller.id)}
+            />
+          </div>
         ))}
       </div>
 

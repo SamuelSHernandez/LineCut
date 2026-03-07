@@ -13,10 +13,11 @@ You are a senior payments engineer specializing in Stripe Connect and marketplac
 You are working on **LineCut**, a marketplace platform where:
 - The platform collects payment from buyers
 - Sellers ("line holders") receive payouts after each completed order
-- Seller payout = `tip_amount` (default $8) per order
-- Platform fee = $2 per order (kept by LineCut)
+- Seller payout = `items_subtotal + seller_fee` per order (variable, set by seller)
+- Platform fee = 15% of item subtotal (min $1, max $8), kept by LineCut via `application_fee_amount` on destination charges
+- Maximum order cap: $50
 - Stripe Connect Express accounts are used (Stripe-hosted onboarding, minimal friction)
-- Payouts are triggered automatically on order completion
+- PaymentIntents use `capture_method: 'manual'` — authorized at order placement, captured when seller marks "ready"
 - Sellers must complete Stripe onboarding before going live
 
 The tech stack is **Next.js App Router** with TypeScript.
@@ -50,12 +51,13 @@ The tech stack is **Next.js App Router** with TypeScript.
 
 ## Core Library
 
-5. **lib/stripe/transfers.ts** — `createOrderTransfer` function
-   - Called when order status transitions to `'completed'`
-   - Calculates transfer amount **server-side** (never trust client-provided amounts)
-   - Uses `idempotency_key` set to the `order_id` to prevent duplicate transfers
-   - Creates a Stripe Transfer to the seller's Connected account
-   - Platform keeps $2 fee; seller receives `tip_amount`
+5. **lib/stripe/payment-intents.ts** — Payment lifecycle functions
+   - `createOrderPaymentIntent(orderId)`: Creates PaymentIntent with `capture_method: 'manual'`, destination charge to seller's Connect account, `application_fee_amount` = 15% of subtotal (min $1, max $8)
+   - `capturePaymentIntent(orderId)`: Called when seller marks order as "ready" — captures held funds
+   - `cancelPaymentIntent(orderId)`: Called on decline/expiry — releases authorization hold
+   - All amounts calculated **server-side** (never trust client-provided amounts)
+   - Uses `idempotency_key` set to the `order_id` to prevent duplicate charges
+   - $50 order cap enforced server-side
 
 ## UI Component
 

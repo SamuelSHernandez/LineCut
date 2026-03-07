@@ -32,6 +32,13 @@ export default function SellerCard({
       type="button"
       onClick={onSelect}
       disabled={isBusy}
+      aria-label={
+        isBusy
+          ? `${seller.firstName} ${seller.lastInitial}. is busy`
+          : isSelected
+            ? `Open order drawer for ${seller.firstName} ${seller.lastInitial}., $${seller.fee.toFixed(2)} fee, trust score ${seller.trustScore}, ${seller.waitEstimate} wait`
+            : `Select ${seller.firstName} ${seller.lastInitial}., $${seller.fee.toFixed(2)} fee, trust score ${seller.trustScore}, ${seller.waitEstimate} wait`
+      }
       className={`w-full text-left bg-ticket rounded-[10px] p-5 shadow-[0_4px_20px_rgba(0,0,0,0.06)] transition-all duration-200 ${
         isSelected
           ? "border-2 border-ketchup shadow-[0_8px_32px_rgba(0,0,0,0.1)]"
@@ -43,7 +50,7 @@ export default function SellerCard({
         <div className="flex items-center gap-3">
           {/* Avatar */}
           <div className="w-9 h-9 rounded-full bg-mustard flex items-center justify-center flex-shrink-0">
-            <span className="font-[family-name:var(--font-display)] text-[14px] text-chalkboard leading-none">
+            <span className="font-[family-name:var(--font-display)] text-[16px] text-chalkboard leading-none">
               {initials}
             </span>
           </div>
@@ -52,7 +59,10 @@ export default function SellerCard({
               <span className="font-[family-name:var(--font-body)] text-[15px] font-semibold text-chalkboard">
                 {seller.firstName} {seller.lastInitial}.
               </span>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-[#DDEFDD] font-[family-name:var(--font-mono)] text-[10px] tracking-[0.5px] text-[#2D6A2D]">
+              <span
+                className="inline-flex items-center px-2 py-0.5 rounded-full bg-[#DDEFDD] font-[family-name:var(--font-mono)] text-[10px] tracking-[0.5px] text-[#2D6A2D]"
+                aria-label={`Trust score: ${seller.trustScore}`}
+              >
                 {seller.trustScore}
               </span>
             </div>
@@ -110,9 +120,12 @@ export default function SellerCard({
           BUSY
         </span>
       ) : isSelected ? (
-        <div className="w-full py-2.5 px-4 bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[13px] font-semibold rounded-[6px] text-center transition-all duration-200 hover:bg-ketchup/90">
+        <span
+          className="block w-full py-3 px-4 bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[13px] font-semibold rounded-[6px] text-center transition-all duration-200"
+          aria-hidden="true"
+        >
           ORDER THROUGH {seller.firstName.toUpperCase()}
-        </div>
+        </span>
       ) : null}
     </button>
   );
