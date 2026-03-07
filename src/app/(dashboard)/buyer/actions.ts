@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { createOrderPaymentIntent } from "@/lib/stripe/payment-intents";
+import { sendPush } from "@/lib/push";
 
 const ORDER_MAX_CENTS = 5000; // $50
 
@@ -82,17 +83,35 @@ export async function placeOrder(input: PlaceOrderInput) {
   }
 
   // Create PaymentIntent
+  let clientSecret: string;
   try {
     const paymentIntent = await createOrderPaymentIntent(order.id);
-    return {
-      success: true,
-      orderId: order.id,
-      clientSecret: paymentIntent.client_secret!,
-    };
+    clientSecret = paymentIntent.client_secret!;
   } catch (err) {
     // Clean up the order if PI creation fails
     await supabase.from("orders").delete().eq("id", order.id);
     const message = err instanceof Error ? err.message : "Payment setup failed";
     return { error: message };
   }
+
+  // Notify seller — fire and forget
+  const { data: buyerProfile } = await supabase
+    .from("profiles")
+    .select("first_name, last_name")
+    .eq("id", user.id)
+    .single();
+  const buyerName = buyerProfile
+    ? `${buyerProfile.first_name ?? "Someone"}`
+    : "Someone";
+  const itemCount = input.items.reduce((sum, i) => sum + i.quantity, 0);
+
+  sendPush({
+    userId: input.sellerId,
+    title: "New order",
+    body: `${buyerName} wants ${itemCount} item${itemCount !== 1 ? "s" : ""}`,
+    url: `/seller`,
+    orderId: order.id,
+  });
+
+  return { success: true, orderId: order.id, clientSecret };
 }
