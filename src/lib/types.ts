@@ -5,6 +5,76 @@ export interface Restaurant {
   lat: number;
   lng: number;
   cuisine: string[];
-  activeSellers: number;
+  activeSellers?: number;
   waitEstimate: string;
+}
+
+export interface WaitTimeStats {
+  restaurantId: string;
+  avgWaitMinutes: number;
+  reportCount: number;
+  activeSellers: number;
+}
+
+export interface SellerSession {
+  id: string;
+  sellerId: string;
+  restaurantId: string;
+  startedAt: string;
+  endedAt: string | null;
+  waitDurationMinutes: number | null;
+  status: "active" | "completed" | "cancelled";
+}
+
+export interface Seller {
+  id: string;
+  restaurantId: string;
+  firstName: string;
+  lastInitial: string;
+  positionInLine: number;
+  waitEstimate: string;
+  trustScore: number;
+  completedOrders: number;
+  fee: number;
+  menuFlexibility: "full" | "popular-only" | "preset";
+  status: "available" | "busy";
+  joinedAt: string;
+}
+
+export interface MenuItem {
+  id: string;
+  restaurantId: string;
+  name: string;
+  priceEstimate: number;
+  popular: boolean;
+}
+
+export interface OrderItem {
+  menuItemId: string;
+  name: string;
+  priceEstimate: number;
+  quantity: number;
+}
+
+export type OrderStatus =
+  | "pending"
+  | "accepted"
+  | "in-progress"
+  | "ready"
+  | "completed"
+  | "cancelled";
+
+export interface Order {
+  id: string;
+  buyerId: string;
+  sellerId: string;
+  restaurantId: string;
+  items: OrderItem[];
+  specialInstructions: string;
+  status: OrderStatus;
+  itemsEstimate: number;
+  sellerFee: number;
+  platformFee: number;
+  total: number;
+  createdAt: string;
 }

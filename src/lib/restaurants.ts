@@ -1,6 +1,7 @@
+import { createClient } from "@/lib/supabase/server";
 import type { Restaurant } from "./types";
 
-export const restaurants: Restaurant[] = [
+const fallbackRestaurants: Restaurant[] = [
   {
     id: "katzs",
     name: "Katz's Delicatessen",
@@ -8,7 +9,6 @@ export const restaurants: Restaurant[] = [
     lat: 40.7223,
     lng: -73.9874,
     cuisine: ["Deli", "Sandwich"],
-    activeSellers: 2,
     waitEstimate: "~25 min",
   },
   {
@@ -18,7 +18,6 @@ export const restaurants: Restaurant[] = [
     lat: 40.7308,
     lng: -74.0021,
     cuisine: ["Pizza"],
-    activeSellers: 1,
     waitEstimate: "~12 min",
   },
   {
@@ -28,7 +27,31 @@ export const restaurants: Restaurant[] = [
     lat: 40.7222,
     lng: -73.9882,
     cuisine: ["Deli", "Bagels"],
-    activeSellers: 1,
     waitEstimate: "~15 min",
   },
 ];
+
+export const restaurants = fallbackRestaurants;
+
+export async function fetchRestaurants(): Promise<Restaurant[]> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("restaurants")
+      .select("id, name, address, lat, lng, cuisine, default_wait_estimate");
+
+    if (error || !data || data.length === 0) return fallbackRestaurants;
+
+    return data.map((r) => ({
+      id: r.id,
+      name: r.name,
+      address: r.address,
+      lat: r.lat,
+      lng: r.lng,
+      cuisine: r.cuisine,
+      waitEstimate: r.default_wait_estimate,
+    }));
+  } catch {
+    return fallbackRestaurants;
+  }
+}
