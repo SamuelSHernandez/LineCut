@@ -100,8 +100,17 @@ export function usePushNotifications(): PushNotificationState {
     };
 
     const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      console.error("[push] Not authenticated, cannot save subscription");
+      return;
+    }
+
     const { error } = await supabase.from("push_subscriptions").upsert(
       {
+        user_id: user.id,
         endpoint,
         p256dh: keys.p256dh,
         auth: keys.auth,
