@@ -39,15 +39,34 @@ export async function updateProfile(
     return { error: "Bio must be 160 characters or less." };
   }
 
+  // Fetch current profile to detect phone/email changes
+  const { data: currentProfile } = await supabase
+    .from("profiles")
+    .select("phone, email")
+    .eq("id", user.id)
+    .single();
+
+  const updateData: Record<string, unknown> = {
+    display_name: displayName.trim(),
+    email: email?.trim() || null,
+    phone: phone?.trim() || null,
+    bio: bio?.trim() || null,
+    neighborhood: neighborhood?.trim() || null,
+  };
+
+  // Reset verification flags when phone/email changes
+  if (currentProfile) {
+    if ((phone?.trim() || null) !== (currentProfile.phone || null)) {
+      updateData.phone_verified = false;
+    }
+    if ((email?.trim() || null) !== (currentProfile.email || null)) {
+      updateData.email_verified = false;
+    }
+  }
+
   const { error } = await supabase
     .from("profiles")
-    .update({
-      display_name: displayName.trim(),
-      email: email?.trim() || null,
-      phone: phone?.trim() || null,
-      bio: bio?.trim() || null,
-      neighborhood: neighborhood?.trim() || null,
-    })
+    .update(updateData)
     .eq("id", user.id);
 
   if (error) {

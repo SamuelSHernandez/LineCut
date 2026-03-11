@@ -14,6 +14,7 @@ export type Profile = {
   bio: string | null;
   neighborhood: string | null;
   phoneVerified: boolean;
+  emailVerified: boolean;
   stripeCustomerId: string | null;
   stripeConnectAccountId: string | null;
   stripeConnectStatus: "not_connected" | "pending" | "active" | "restricted";

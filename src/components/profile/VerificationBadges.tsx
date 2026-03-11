@@ -7,6 +7,7 @@ export default function VerificationBadges() {
 
   const badges: { label: string; active: boolean }[] = [
     { label: "PHONE", active: profile.phoneVerified },
+    { label: "EMAIL", active: profile.emailVerified },
     { label: "PAYMENT", active: !!profile.paymentMethodLast4 },
     {
       label: "PAYOUTS",

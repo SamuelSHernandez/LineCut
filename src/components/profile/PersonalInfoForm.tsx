@@ -6,6 +6,13 @@ import {
   updateProfile,
   type ProfileActionState,
 } from "@/app/(dashboard)/profile/actions";
+import {
+  sendPhoneOtp,
+  verifyPhoneOtp,
+  sendEmailOtp,
+  verifyEmailOtp,
+} from "@/app/(dashboard)/profile/verification-actions";
+import OtpVerifyInline from "@/components/profile/OtpVerifyInline";
 
 const initialState: ProfileActionState = { error: null };
 
@@ -15,6 +22,26 @@ export default function PersonalInfoForm() {
     updateProfile,
     initialState
   );
+
+  const handleSendPhoneOtp = async () => {
+    if (!profile.phone) return { error: "No phone number saved." };
+    return sendPhoneOtp(profile.phone);
+  };
+
+  const handleVerifyPhoneOtp = async (code: string) => {
+    if (!profile.phone) return { error: "No phone number saved." };
+    return verifyPhoneOtp(profile.phone, code);
+  };
+
+  const handleSendEmailOtp = async () => {
+    if (!profile.email) return { error: "No email saved." };
+    return sendEmailOtp(profile.email);
+  };
+
+  const handleVerifyEmailOtp = async (code: string) => {
+    if (!profile.email) return { error: "No email saved." };
+    return verifyEmailOtp(profile.email, code);
+  };
 
   return (
     <div className="bg-ticket rounded-[10px] border border-[#eee6d8] p-5 shadow-[0_4px_20px_rgba(0,0,0,0.06)]">
@@ -65,6 +92,13 @@ export default function PersonalInfoForm() {
             placeholder="(555) 123-4567"
             className="w-full px-4 py-3 rounded-[6px] bg-butcher-paper border border-[#eee6d8] text-chalkboard font-[family-name:var(--font-body)] text-[15px] outline-none placeholder:text-sidewalk/60 focus:border-chalkboard focus:ring-2 focus:ring-chalkboard/20 transition-colors"
           />
+          <OtpVerifyInline
+            channel="phone"
+            isVerified={profile.phoneVerified}
+            value={profile.phone}
+            onSendCode={handleSendPhoneOtp}
+            onVerifyCode={handleVerifyPhoneOtp}
+          />
         </div>
 
         <div>
@@ -78,6 +112,13 @@ export default function PersonalInfoForm() {
             defaultValue={profile.email ?? ""}
             placeholder="you@example.com"
             className="w-full px-4 py-3 rounded-[6px] bg-butcher-paper border border-[#eee6d8] text-chalkboard font-[family-name:var(--font-body)] text-[15px] outline-none placeholder:text-sidewalk/60 focus:border-chalkboard focus:ring-2 focus:ring-chalkboard/20 transition-colors"
+          />
+          <OtpVerifyInline
+            channel="email"
+            isVerified={profile.emailVerified}
+            value={profile.email}
+            onSendCode={handleSendEmailOtp}
+            onVerifyCode={handleVerifyEmailOtp}
           />
           <p className="font-[family-name:var(--font-mono)] text-[11px] text-sidewalk mt-1">
             For order confirmations and receipts
