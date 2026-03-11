@@ -20,7 +20,7 @@ function SignupForm() {
   return (
     <>
       {state.error && (
-        <div className="bg-[#FFF3D6] border border-ketchup rounded-[6px] px-4 py-3 mb-6">
+        <div role="alert" className="bg-[#FFF3D6] border border-ketchup rounded-[6px] px-4 py-3 mb-6">
           <p className="font-[family-name:var(--font-body)] text-[13px] text-ketchup font-medium">
             {state.error}
           </p>
@@ -29,43 +29,46 @@ function SignupForm() {
 
       <form action={formAction} className="flex flex-col gap-4">
         <div>
-          <label className="font-[family-name:var(--font-body)] text-[12px] font-medium text-sidewalk uppercase tracking-[1px] mb-1.5 block">
+          <label htmlFor="signup-name" className="font-[family-name:var(--font-body)] text-[12px] font-medium text-sidewalk uppercase tracking-[1px] mb-1.5 block">
             Name
           </label>
           <input
+            id="signup-name"
             type="text"
             name="displayName"
             required
             placeholder="First name + last initial (e.g. Marco R.)"
-            className="w-full px-4 py-3 rounded-[6px] bg-ticket border border-[#eee6d8] text-chalkboard font-[family-name:var(--font-body)] text-[15px] outline-none placeholder:text-sidewalk/60 focus:border-chalkboard transition-colors"
+            className="w-full px-4 py-3 rounded-[6px] bg-ticket border border-[#eee6d8] text-chalkboard font-[family-name:var(--font-body)] text-[15px] outline-none placeholder:text-sidewalk/60 focus:border-chalkboard focus:ring-2 focus:ring-chalkboard/20 transition-colors"
           />
         </div>
 
         <div>
-          <label className="font-[family-name:var(--font-body)] text-[12px] font-medium text-sidewalk uppercase tracking-[1px] mb-1.5 block">
+          <label htmlFor="signup-email" className="font-[family-name:var(--font-body)] text-[12px] font-medium text-sidewalk uppercase tracking-[1px] mb-1.5 block">
             Email
           </label>
           <input
+            id="signup-email"
             type="email"
             name="email"
             required
             defaultValue={emailParam}
             placeholder="your@email.com"
-            className="w-full px-4 py-3 rounded-[6px] bg-ticket border border-[#eee6d8] text-chalkboard font-[family-name:var(--font-body)] text-[15px] outline-none placeholder:text-sidewalk/60 focus:border-chalkboard transition-colors"
+            className="w-full px-4 py-3 rounded-[6px] bg-ticket border border-[#eee6d8] text-chalkboard font-[family-name:var(--font-body)] text-[15px] outline-none placeholder:text-sidewalk/60 focus:border-chalkboard focus:ring-2 focus:ring-chalkboard/20 transition-colors"
           />
         </div>
 
         <div>
-          <label className="font-[family-name:var(--font-body)] text-[12px] font-medium text-sidewalk uppercase tracking-[1px] mb-1.5 block">
+          <label htmlFor="signup-password" className="font-[family-name:var(--font-body)] text-[12px] font-medium text-sidewalk uppercase tracking-[1px] mb-1.5 block">
             Password
           </label>
           <input
+            id="signup-password"
             type="password"
             name="password"
             required
             minLength={6}
             placeholder="At least 6 characters"
-            className="w-full px-4 py-3 rounded-[6px] bg-ticket border border-[#eee6d8] text-chalkboard font-[family-name:var(--font-body)] text-[15px] outline-none placeholder:text-sidewalk/60 focus:border-chalkboard transition-colors"
+            className="w-full px-4 py-3 rounded-[6px] bg-ticket border border-[#eee6d8] text-chalkboard font-[family-name:var(--font-body)] text-[15px] outline-none placeholder:text-sidewalk/60 focus:border-chalkboard focus:ring-2 focus:ring-chalkboard/20 transition-colors"
           />
         </div>
 
@@ -84,7 +87,7 @@ function SignupForm() {
                 required
                 className="peer sr-only"
               />
-              <div className="border-2 border-[#eee6d8] peer-checked:border-ketchup rounded-[6px] p-4 text-center transition-colors">
+              <div className="border-2 border-[#eee6d8] peer-checked:border-ketchup peer-focus-visible:ring-2 peer-focus-visible:ring-ketchup/50 rounded-[6px] p-4 text-center transition-colors">
                 <span className="font-[family-name:var(--font-display)] text-[18px] tracking-[1px] block mb-1">
                   SKIP LINES
                 </span>
@@ -101,7 +104,7 @@ function SignupForm() {
                 defaultChecked={defaultRole === "seller"}
                 className="peer sr-only"
               />
-              <div className="border-2 border-[#eee6d8] peer-checked:border-mustard rounded-[6px] p-4 text-center transition-colors">
+              <div className="border-2 border-[#eee6d8] peer-checked:border-mustard peer-focus-visible:ring-2 peer-focus-visible:ring-mustard/50 rounded-[6px] p-4 text-center transition-colors">
                 <span className="font-[family-name:var(--font-display)] text-[18px] tracking-[1px] block mb-1">
                   EARN MONEY
                 </span>
@@ -116,7 +119,7 @@ function SignupForm() {
         <button
           type="submit"
           disabled={pending}
-          className="mt-2 w-full py-3.5 bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[15px] font-semibold rounded-[6px] hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+          className="mt-2 w-full min-h-[48px] py-3.5 bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[15px] font-semibold rounded-[6px] hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-ketchup/50"
         >
           {pending ? "Creating account..." : "Create Account"}
         </button>
@@ -156,7 +159,7 @@ function PageHeader() {
 export default function SignupPage() {
   return (
     <div className="min-h-screen flex flex-col">
-      <nav className="flex items-center justify-between px-6 md:px-12 py-5">
+      <nav aria-label="Site navigation" className="flex items-center justify-between px-6 md:px-12 py-5">
         <Link href="/">
           <Logo size="sm" />
         </Link>

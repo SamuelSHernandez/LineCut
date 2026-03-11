@@ -44,7 +44,7 @@ export default function SellerPayoutSection() {
     not_connected: {
       label: "NOT CONNECTED",
       bg: "bg-[#E8E8E8]",
-      text: "text-[#666]",
+      text: "text-[#4D4D4D]",
       description: "Connect your Stripe account to receive payouts.",
     },
     pending: {
@@ -91,7 +91,7 @@ export default function SellerPayoutSection() {
       </p>
 
       {error && (
-        <div className="bg-[#FFF3D6] border border-ketchup rounded-[6px] px-4 py-3 mb-4">
+        <div role="alert" className="bg-[#FFF3D6] border border-ketchup rounded-[6px] px-4 py-3 mb-4">
           <p className="font-[family-name:var(--font-body)] text-[13px] text-ketchup font-medium">
             {error}
           </p>
@@ -103,7 +103,7 @@ export default function SellerPayoutSection() {
           type="button"
           onClick={handleConnect}
           disabled={isPending}
-          className="w-full py-3 bg-mustard text-chalkboard font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] hover:bg-[#d4a843] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full min-h-[48px] py-3 bg-mustard text-chalkboard font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] hover:bg-[#d4a843] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-mustard/50"
         >
           {isPending ? "Setting up..." : "Connect with Stripe"}
         </button>
@@ -114,7 +114,7 @@ export default function SellerPayoutSection() {
           type="button"
           onClick={handleConnect}
           disabled={isPending}
-          className="w-full py-3 bg-mustard text-chalkboard font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] hover:bg-[#d4a843] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full min-h-[48px] py-3 bg-mustard text-chalkboard font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] hover:bg-[#d4a843] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-mustard/50"
         >
           {isPending ? "Loading..." : "Complete Setup"}
         </button>
@@ -125,7 +125,7 @@ export default function SellerPayoutSection() {
           type="button"
           onClick={handleDashboard}
           disabled={isPending}
-          className="w-full py-3 bg-transparent text-chalkboard border-2 border-chalkboard font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] hover:bg-chalkboard hover:text-ticket transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full min-h-[48px] py-3 bg-transparent text-chalkboard border-2 border-chalkboard font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] hover:bg-chalkboard hover:text-ticket transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-chalkboard/30"
         >
           {isPending ? "Loading..." : "Open Stripe Dashboard"}
         </button>
@@ -136,7 +136,7 @@ export default function SellerPayoutSection() {
           type="button"
           onClick={handleConnect}
           disabled={isPending}
-          className="w-full py-3 bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full min-h-[48px] py-3 bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-ketchup/50"
         >
           {isPending ? "Loading..." : "Fix Account Issues"}
         </button>

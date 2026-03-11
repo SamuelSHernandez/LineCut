@@ -90,7 +90,7 @@ export default function RestaurantBrowser({
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search restaurants near you..."
           aria-label="Search restaurants"
-          className="w-full h-11 bg-butcher-paper rounded-[6px] border border-[#ddd4c4] px-3 font-[family-name:var(--font-body)] text-[13px] text-chalkboard placeholder:text-sidewalk focus:outline-none focus:border-ketchup focus:ring-2 focus:ring-ketchup/20 transition-colors"
+          className="w-full h-11 bg-butcher-paper rounded-[6px] border border-[#ddd4c4] px-3 font-[family-name:var(--font-body)] text-[13px] text-chalkboard placeholder:text-sidewalk focus:outline-none focus:border-ketchup focus:ring-2 focus:ring-ketchup/50 transition-colors"
         />
       </div>
 

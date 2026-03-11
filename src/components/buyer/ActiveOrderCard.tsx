@@ -18,7 +18,7 @@ function getStatusBadge(status: OrderStatus) {
     case "ready":
       return { label: "READY", bg: "bg-[#FDECEA]", text: "text-[#C4382A]" };
     default:
-      return { label: status.toUpperCase(), bg: "bg-[#E8E8E8]", text: "text-[#666]" };
+      return { label: status.toUpperCase(), bg: "bg-[#E8E8E8]", text: "text-[#4D4D4D]" };
   }
 }
 
@@ -38,7 +38,7 @@ export default function ActiveOrderCard({ order, onTap }: ActiveOrderCardProps) 
     <button
       type="button"
       onClick={onTap}
-      className="w-full text-left bg-ticket rounded-[10px] border border-[#eee6d8] p-5 shadow-[0_4px_20px_rgba(0,0,0,0.06)] transition-all duration-200 hover:shadow-[0_8px_32px_rgba(0,0,0,0.1)] hover:scale-[1.01] active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-ketchup/20"
+      className="w-full text-left bg-ticket rounded-[10px] border border-[#eee6d8] p-5 shadow-[0_4px_20px_rgba(0,0,0,0.06)] transition-all duration-200 hover:shadow-[0_8px_32px_rgba(0,0,0,0.1)] hover:scale-[1.01] active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-ketchup/50"
       aria-label={`Order at ${order.restaurantName} through ${order.sellerName}, ${badge.label}, ${totalItems} items. Tap to track.`}
     >
       <div className="flex items-center justify-between mb-2">

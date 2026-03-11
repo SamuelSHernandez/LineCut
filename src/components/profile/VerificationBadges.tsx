@@ -31,7 +31,7 @@ export default function VerificationBadges() {
           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-[family-name:var(--font-mono)] text-[10px] tracking-[1px] uppercase ${
             badge.active
               ? "bg-[#DDEFDD] text-[#2D6A2D]"
-              : "bg-[#E8E8E8] text-[#666]"
+              : "bg-[#E8E8E8] text-[#4D4D4D]"
           }`}
         >
           {badge.active ? (

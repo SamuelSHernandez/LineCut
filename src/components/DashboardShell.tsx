@@ -5,6 +5,7 @@ import { OrderProvider } from "@/lib/order-context";
 import { SellerPresenceProvider } from "@/lib/seller-presence-context";
 import DashboardNav from "@/components/DashboardNav";
 import NotificationPrompt from "@/components/NotificationPrompt";
+import InstallPrompt from "@/components/shared/InstallPrompt";
 
 export default function DashboardShell({
   profile,
@@ -25,6 +26,7 @@ export default function DashboardShell({
               <NotificationPrompt />
               {children}
             </main>
+            <InstallPrompt />
           </div>
         </SellerPresenceProvider>
       </OrderProvider>

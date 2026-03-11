@@ -41,7 +41,7 @@ export default function RoleManager() {
       </p>
 
       {error && (
-        <div className="bg-[#FFF3D6] border border-ketchup rounded-[6px] px-4 py-3 mb-4">
+        <div role="alert" className="bg-[#FFF3D6] border border-ketchup rounded-[6px] px-4 py-3 mb-4">
           <p className="font-[family-name:var(--font-body)] text-[13px] text-ketchup font-medium">
             {error}
           </p>
@@ -62,7 +62,7 @@ export default function RoleManager() {
             type="button"
             onClick={() => handleToggle("buyer", profile.isBuyer)}
             disabled={isPending}
-            className={`px-4 py-2 rounded-[6px] font-[family-name:var(--font-body)] text-[13px] font-semibold transition-colors cursor-pointer disabled:opacity-50 ${
+            className={`px-4 py-2 min-h-[44px] rounded-[6px] font-[family-name:var(--font-body)] text-[13px] font-semibold transition-colors cursor-pointer disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-chalkboard/30 ${
               profile.isBuyer
                 ? "bg-[#DDEFDD] text-[#2D6A2D]"
                 : "bg-butcher-paper border-2 border-chalkboard text-chalkboard hover:bg-[#eee6d8]"
@@ -85,7 +85,7 @@ export default function RoleManager() {
             type="button"
             onClick={() => handleToggle("seller", profile.isSeller)}
             disabled={isPending}
-            className={`px-4 py-2 rounded-[6px] font-[family-name:var(--font-body)] text-[13px] font-semibold transition-colors cursor-pointer disabled:opacity-50 ${
+            className={`px-4 py-2 min-h-[44px] rounded-[6px] font-[family-name:var(--font-body)] text-[13px] font-semibold transition-colors cursor-pointer disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-chalkboard/30 ${
               profile.isSeller
                 ? "bg-[#DDEFDD] text-[#2D6A2D]"
                 : "bg-butcher-paper border-2 border-chalkboard text-chalkboard hover:bg-[#eee6d8]"

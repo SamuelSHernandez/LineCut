@@ -89,7 +89,7 @@ export default function OrderTrackerDrawer({
               ref={closeButtonRef}
               type="button"
               onClick={onClose}
-              className="w-11 h-11 flex items-center justify-center text-sidewalk hover:text-chalkboard transition-colors rounded-[6px] focus:outline-none focus:ring-2 focus:ring-ketchup/20"
+              className="w-11 h-11 flex items-center justify-center text-sidewalk hover:text-chalkboard transition-colors rounded-[6px] focus:outline-none focus:ring-2 focus:ring-ketchup/50"
               aria-label="Close order tracker"
             >
               <svg

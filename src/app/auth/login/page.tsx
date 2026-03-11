@@ -16,7 +16,7 @@ function LoginForm() {
   return (
     <>
       {state.error && (
-        <div className="bg-[#FFF3D6] border border-ketchup rounded-[6px] px-4 py-3 mb-6">
+        <div role="alert" className="bg-[#FFF3D6] border border-ketchup rounded-[6px] px-4 py-3 mb-6">
           <p className="font-[family-name:var(--font-body)] text-[13px] text-ketchup font-medium">
             {state.error}
           </p>
@@ -27,35 +27,37 @@ function LoginForm() {
         <input type="hidden" name="next" value={next} />
 
         <div>
-          <label className="font-[family-name:var(--font-body)] text-[12px] font-medium text-sidewalk uppercase tracking-[1px] mb-1.5 block">
+          <label htmlFor="login-email" className="font-[family-name:var(--font-body)] text-[12px] font-medium text-sidewalk uppercase tracking-[1px] mb-1.5 block">
             Email
           </label>
           <input
+            id="login-email"
             type="email"
             name="email"
             required
             placeholder="your@email.com"
-            className="w-full px-4 py-3 rounded-[6px] bg-ticket border border-[#eee6d8] text-chalkboard font-[family-name:var(--font-body)] text-[15px] outline-none placeholder:text-sidewalk/60 focus:border-chalkboard transition-colors"
+            className="w-full px-4 py-3 rounded-[6px] bg-ticket border border-[#eee6d8] text-chalkboard font-[family-name:var(--font-body)] text-[15px] outline-none placeholder:text-sidewalk/60 focus:border-chalkboard focus:ring-2 focus:ring-chalkboard/20 transition-colors"
           />
         </div>
 
         <div>
-          <label className="font-[family-name:var(--font-body)] text-[12px] font-medium text-sidewalk uppercase tracking-[1px] mb-1.5 block">
+          <label htmlFor="login-password" className="font-[family-name:var(--font-body)] text-[12px] font-medium text-sidewalk uppercase tracking-[1px] mb-1.5 block">
             Password
           </label>
           <input
+            id="login-password"
             type="password"
             name="password"
             required
             placeholder="Your password"
-            className="w-full px-4 py-3 rounded-[6px] bg-ticket border border-[#eee6d8] text-chalkboard font-[family-name:var(--font-body)] text-[15px] outline-none placeholder:text-sidewalk/60 focus:border-chalkboard transition-colors"
+            className="w-full px-4 py-3 rounded-[6px] bg-ticket border border-[#eee6d8] text-chalkboard font-[family-name:var(--font-body)] text-[15px] outline-none placeholder:text-sidewalk/60 focus:border-chalkboard focus:ring-2 focus:ring-chalkboard/20 transition-colors"
           />
         </div>
 
         <button
           type="submit"
           disabled={pending}
-          className="mt-2 w-full py-3.5 bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[15px] font-semibold rounded-[6px] hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+          className="mt-2 w-full min-h-[48px] py-3.5 bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[15px] font-semibold rounded-[6px] hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-ketchup/50"
         >
           {pending ? "Logging in..." : "Log In"}
         </button>
@@ -77,7 +79,7 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <div className="min-h-screen flex flex-col">
-      <nav className="flex items-center justify-between px-6 md:px-12 py-5">
+      <nav aria-label="Site navigation" className="flex items-center justify-between px-6 md:px-12 py-5">
         <Link href="/">
           <Logo size="sm" />
         </Link>

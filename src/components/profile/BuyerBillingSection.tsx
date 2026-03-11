@@ -83,7 +83,7 @@ function CardForm() {
       </div>
 
       {error && (
-        <p className="font-[family-name:var(--font-body)] text-[13px] text-ketchup">
+        <p role="alert" className="font-[family-name:var(--font-body)] text-[13px] text-ketchup">
           {error}
         </p>
       )}
@@ -91,7 +91,7 @@ function CardForm() {
       <button
         type="submit"
         disabled={saving || !stripe}
-        className="w-full py-3 bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+        className="w-full min-h-[48px] py-3 bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-ketchup/50"
       >
         {saving ? "Saving card..." : "Save Card"}
       </button>
@@ -160,7 +160,7 @@ function SavedCard() {
         </button>
       </div>
       {error && (
-        <p className="font-[family-name:var(--font-body)] text-[13px] text-ketchup">
+        <p role="alert" className="font-[family-name:var(--font-body)] text-[13px] text-ketchup">
           {error}
         </p>
       )}
