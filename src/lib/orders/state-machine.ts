@@ -145,5 +145,14 @@ export function getAvailableTransitions(
 /** Auto-cancel timeout for pending orders (ms) */
 export const PENDING_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
+/** Ready-state timeout: buyer has 15 min to pick up before escalation (ms) */
+export const READY_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+
+/** Ready-state reminder: nudge buyer at 10 min (ms) */
+export const READY_REMINDER_MS = 10 * 60 * 1000; // 10 minutes
+
+/** Auto-complete after single-party confirmation (ms) */
+export const HANDOFF_AUTO_COMPLETE_MS = 5 * 60 * 1000; // 5 minutes
+
 /** System actor UUID — used for auto-cancel and scheduled jobs */
 export const SYSTEM_ACTOR_ID = "00000000-0000-0000-0000-000000000000";

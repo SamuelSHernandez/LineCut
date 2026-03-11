@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/stale-ready-orders",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-chat",
+      "schedule": "*/10 * * * *"
+    }
+  ]
+}

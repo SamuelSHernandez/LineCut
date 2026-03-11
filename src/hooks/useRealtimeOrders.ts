@@ -22,6 +22,7 @@ interface OrderRow {
   stripe_payment_intent_id: string | null;
   created_at: string;
   updated_at: string;
+  ready_at: string | null;
 }
 
 /**
@@ -45,6 +46,7 @@ export function rowToOrder(row: OrderRow): Order {
     stripePaymentIntentId: row.stripe_payment_intent_id,
     createdAt: row.created_at,
     statusUpdatedAt: row.updated_at,
+    readyAt: row.ready_at ?? undefined,
     restaurantName: "",
     sellerName: "",
     buyerName: "",

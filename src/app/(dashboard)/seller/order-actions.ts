@@ -8,6 +8,7 @@ import {
   cancelPaymentIntent,
 } from "@/lib/stripe/payment-intents";
 import { sendPush } from "@/lib/push";
+import { confirmHandoff } from "@/lib/handoff";
 
 /** Look up buyer_id for an order (used to send push notifications). */
 async function getBuyerId(orderId: string): Promise<string | null> {
@@ -240,16 +241,46 @@ export async function markReady(orderId: string): Promise<ActionResult> {
 }
 
 /**
- * Seller marks a ready order as completed (handed off to buyer).
- * Transition: ready -> completed
+ * Seller confirms hand-off. If buyer has also confirmed, transitions to completed.
+ * Transition: ready -> completed (when both parties confirm)
  */
 export async function markCompleted(orderId: string): Promise<ActionResult> {
   const { user } = await getAuthenticatedUser();
 
-  const result = await callTransitionRpc(orderId, "completed", user.id);
+  const result = await confirmHandoff(orderId, user.id, "seller");
+
+  if (result.error) {
+    return { error: result.error };
+  }
+
+  revalidatePath("/seller");
+  return { success: true };
+}
+
+/**
+ * Seller force-completes after timeout (buyer didn't show or didn't confirm).
+ */
+export async function forceComplete(orderId: string): Promise<ActionResult> {
+  const { user } = await getAuthenticatedUser();
+
+  const result = await callTransitionRpc(orderId, "completed", user.id, {
+    unilateral: true,
+    reason: "seller_force_complete",
+  });
 
   if (result.error) {
     return { error: result.error, errorCode: result.errorCode };
+  }
+
+  // Partial refund: buyer gets platform fee back (seller did the work)
+  try {
+    const { refundPartialPlatformFee } = await import(
+      "@/lib/stripe/payment-intents"
+    );
+    await refundPartialPlatformFee(orderId);
+  } catch (err) {
+    console.error("[forceComplete] Partial refund failed:", err);
+    // Don't block the completion — refund can be handled manually
   }
 
   revalidatePath("/seller");

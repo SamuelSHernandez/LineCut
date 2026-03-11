@@ -54,6 +54,7 @@ interface OrderRow {
   stripe_payment_intent_id: string | null;
   created_at: string;
   updated_at: string;
+  ready_at: string | null;
 }
 
 // ── Provider ─────────────────────────────────────────────────────────────────
@@ -95,7 +96,7 @@ export function OrderProvider({ userId, role, children }: OrderProviderProps) {
       const { data, error } = await supabase
         .from("orders")
         .select(
-          "id, buyer_id, seller_id, restaurant_id, items, special_instructions, status, items_subtotal, seller_fee, platform_fee, total, stripe_payment_intent_id, created_at, updated_at"
+          "id, buyer_id, seller_id, restaurant_id, items, special_instructions, status, items_subtotal, seller_fee, platform_fee, total, stripe_payment_intent_id, created_at, updated_at, ready_at"
         )
         .eq(column, userId)
         .not("status", "in", '("completed","cancelled")')
@@ -154,6 +155,7 @@ export function OrderProvider({ userId, role, children }: OrderProviderProps) {
               ...o,
               status: updatedOrder.status,
               statusUpdatedAt: updatedOrder.statusUpdatedAt,
+              readyAt: updatedOrder.readyAt ?? o.readyAt,
             }
           : o
       );

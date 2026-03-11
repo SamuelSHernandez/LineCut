@@ -153,3 +153,91 @@ export async function cancelPaymentIntent(orderId: string) {
   // Status transition is handled by the transition_order RPC in order-actions.
   // Do NOT update order status here to avoid bypassing the state machine.
 }
+
+/**
+ * Partial refund: refunds only the platform_fee portion back to the buyer.
+ * Used when seller did the work but buyer no-showed (force-complete / stale-ready).
+ */
+export async function refundPartialPlatformFee(orderId: string) {
+  const supabase = getAdminClient();
+  const stripe = getStripe();
+
+  const { data: order } = await supabase
+    .from("orders")
+    .select("stripe_payment_intent_id, platform_fee")
+    .eq("id", orderId)
+    .single();
+
+  if (!order?.stripe_payment_intent_id) {
+    throw new Error("No PaymentIntent found for this order");
+  }
+
+  if (!order.platform_fee || order.platform_fee <= 0) {
+    return; // Nothing to refund
+  }
+
+  // Refund only the platform fee portion back to the buyer
+  const refund = await stripe.refunds.create(
+    {
+      payment_intent: order.stripe_payment_intent_id,
+      amount: order.platform_fee, // cents
+      reason: "requested_by_customer",
+      metadata: {
+        order_id: orderId,
+        refund_type: "partial_platform_fee",
+      },
+    },
+    { idempotencyKey: `refund_partial_${orderId}` }
+  );
+
+  return refund;
+}
+
+/**
+ * Full refund: refunds the entire captured amount, or cancels the PI if not yet captured.
+ * Used for dispute resolutions in the buyer's favor.
+ */
+export async function refundFull(orderId: string) {
+  const supabase = getAdminClient();
+  const stripe = getStripe();
+
+  const { data: order } = await supabase
+    .from("orders")
+    .select("stripe_payment_intent_id")
+    .eq("id", orderId)
+    .single();
+
+  if (!order?.stripe_payment_intent_id) {
+    throw new Error("No PaymentIntent found for this order");
+  }
+
+  const pi = await stripe.paymentIntents.retrieve(
+    order.stripe_payment_intent_id
+  );
+
+  if (pi.status === "succeeded") {
+    // Full refund
+    const refund = await stripe.refunds.create(
+      {
+        payment_intent: order.stripe_payment_intent_id,
+        metadata: {
+          order_id: orderId,
+          refund_type: "full_dispute_refund",
+        },
+      },
+      { idempotencyKey: `refund_full_${orderId}` }
+    );
+    return refund;
+  } else if (pi.status === "requires_capture") {
+    // Not yet captured, just cancel
+    await stripe.paymentIntents.cancel(
+      order.stripe_payment_intent_id,
+      {},
+      { idempotencyKey: `cancel_pi_full_${orderId}` }
+    );
+    return null;
+  }
+
+  // Already refunded or cancelled
+  return null;
+}
