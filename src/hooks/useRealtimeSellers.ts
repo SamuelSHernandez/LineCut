@@ -14,6 +14,8 @@ interface SellerSessionRow {
   started_at: string;
   ended_at: string | null;
   wait_duration_minutes: number | null;
+  estimated_wait_minutes: number | null;
+  seller_fee_cents: number | null;
   status: "active" | "winding_down" | "completed" | "cancelled";
   created_at: string;
 }
@@ -29,6 +31,8 @@ export function rowToSellerSession(row: SellerSessionRow): SellerSession {
     startedAt: row.started_at,
     endedAt: row.ended_at,
     waitDurationMinutes: row.wait_duration_minutes,
+    estimatedWaitMinutes: row.estimated_wait_minutes ?? null,
+    sellerFeeCents: row.seller_fee_cents ?? null,
     status: row.status,
   };
 }

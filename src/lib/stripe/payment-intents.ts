@@ -10,9 +10,9 @@ function getAdminClient() {
 }
 
 export function calculatePlatformFeeCents(itemsSubtotalCents: number): number {
-  const fee = Math.round(itemsSubtotalCents * 0.15);
-  const minCents = 100; // $1
-  const maxCents = 800; // $8
+  const fee = Math.round(itemsSubtotalCents * 0.10);
+  const minCents = 50; // $0.50
+  const maxCents = 500; // $5
   return Math.min(Math.max(fee, minCents), maxCents);
 }
 

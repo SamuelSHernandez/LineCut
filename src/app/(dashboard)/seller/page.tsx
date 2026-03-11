@@ -36,10 +36,21 @@ export default async function SellerDashboard() {
 
   const restaurantList = await fetchRestaurants();
 
+  // Fetch historical wait stats for auto-suggest
+  let suggestedWaitMinutes: number | null = null;
+  if (restaurantList.length > 0) {
+    const { data: waitStats } = await supabase.rpc("get_wait_time_stats", {
+      p_restaurant_id: restaurantList[0].id,
+    });
+    if (waitStats && Array.isArray(waitStats) && waitStats.length > 0) {
+      suggestedWaitMinutes = waitStats[0].avg_wait_minutes ?? null;
+    }
+  }
+
   // Fetch active or winding-down session for this seller
   const { data: activeSessionData } = await supabase
     .from("seller_sessions")
-    .select("id, seller_id, restaurant_id, started_at, ended_at, wait_duration_minutes, status")
+    .select("id, seller_id, restaurant_id, started_at, ended_at, wait_duration_minutes, estimated_wait_minutes, seller_fee_cents, status")
     .eq("seller_id", user.id)
     .in("status", ["active", "winding_down"])
     .maybeSingle();
@@ -52,6 +63,8 @@ export default async function SellerDashboard() {
         startedAt: activeSessionData.started_at,
         endedAt: activeSessionData.ended_at,
         waitDurationMinutes: activeSessionData.wait_duration_minutes,
+        estimatedWaitMinutes: activeSessionData.estimated_wait_minutes ?? null,
+        sellerFeeCents: activeSessionData.seller_fee_cents ?? null,
         status: activeSessionData.status,
       }
     : null;
@@ -78,6 +91,7 @@ export default async function SellerDashboard() {
         activeSession={activeSession}
         stripeConnectStatus={profile.stripe_connect_status ?? "not_connected"}
         kycStatus={profile.kyc_status ?? "none"}
+        suggestedWaitMinutes={suggestedWaitMinutes}
       />
 
       {/* Order Management */}

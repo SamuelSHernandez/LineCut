@@ -44,3 +44,4 @@ supabase/.temp
 next-env.d.ts
 
 trash
+.claude/agent-memory/linecut-engineer/MEMORY.md

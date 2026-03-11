@@ -23,6 +23,8 @@ export interface SellerSession {
   startedAt: string;
   endedAt: string | null;
   waitDurationMinutes: number | null;
+  estimatedWaitMinutes: number | null;
+  sellerFeeCents: number | null;
   status: "active" | "winding_down" | "completed" | "cancelled";
 }
 

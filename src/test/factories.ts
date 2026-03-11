@@ -99,6 +99,8 @@ export function createMockSellerSession(
     startedAt: "2026-03-10T11:00:00Z",
     endedAt: null,
     waitDurationMinutes: 15,
+    estimatedWaitMinutes: null,
+    sellerFeeCents: null,
     status: "active",
     ...overrides,
   };

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getDistanceMiles } from "@/lib/geo";
 import { trackEvent, EVENTS } from "@/lib/analytics";
+import { getFeeCap, VALID_WAIT_MINUTES } from "@/lib/fee-tiers";
 
 // 1 mile = 1609.344 meters
 const MILES_TO_METERS = 1609.344;
@@ -28,7 +29,12 @@ interface GoLiveCoords {
   lng: number;
 }
 
-export async function goLive(restaurantId: string, coords?: GoLiveCoords) {
+interface GoLiveSessionData {
+  estimatedWaitMinutes: number;
+  sellerFeeCents: number;
+}
+
+export async function goLive(restaurantId: string, coords?: GoLiveCoords, sessionData?: GoLiveSessionData) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -92,16 +98,37 @@ export async function goLive(restaurantId: string, coords?: GoLiveCoords) {
     };
   }
 
+  // Validate session data if provided
+  if (sessionData) {
+    if (!VALID_WAIT_MINUTES.includes(sessionData.estimatedWaitMinutes)) {
+      return { error: "Invalid wait estimate." };
+    }
+    const maxFeeCents = getFeeCap(sessionData.estimatedWaitMinutes) * 100;
+    if (sessionData.sellerFeeCents < 100 || sessionData.sellerFeeCents > maxFeeCents) {
+      return { error: `Fee must be between $1 and $${maxFeeCents / 100} for this wait estimate.` };
+    }
+  }
+
   const { error } = await supabase.from("seller_sessions").insert({
     seller_id: user.id,
     restaurant_id: restaurantId,
+    ...(sessionData && {
+      estimated_wait_minutes: sessionData.estimatedWaitMinutes,
+      seller_fee_cents: sessionData.sellerFeeCents,
+    }),
   });
 
   if (error) {
     return { error: "Failed to start session. Please try again." };
   }
 
-  trackEvent(EVENTS.SELLER_WENT_LIVE, user.id, { restaurant_id: restaurantId });
+  trackEvent(EVENTS.SELLER_WENT_LIVE, user.id, {
+    restaurant_id: restaurantId,
+    ...(sessionData && {
+      estimated_wait_minutes: sessionData.estimatedWaitMinutes,
+      seller_fee_cents: sessionData.sellerFeeCents,
+    }),
+  });
 
   return { success: true };
 }

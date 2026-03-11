@@ -1,0 +1,28 @@
+export interface WaitTier {
+  label: string;
+  description: string;
+  representativeMinutes: number;
+  maxFeeDollars: number;
+}
+
+export const WAIT_TIERS: WaitTier[] = [
+  { label: "Short", description: "< 15 min", representativeMinutes: 10, maxFeeDollars: 2 },
+  { label: "Medium", description: "15\u201330 min", representativeMinutes: 20, maxFeeDollars: 5 },
+  { label: "Long", description: "30+ min", representativeMinutes: 40, maxFeeDollars: 10 },
+];
+
+/** Valid representative minutes values for server-side validation. */
+export const VALID_WAIT_MINUTES = WAIT_TIERS.map((t) => t.representativeMinutes);
+
+/** Returns the max fee in dollars for a given estimated wait in minutes. */
+export function getFeeCap(estimatedMinutes: number): number {
+  const tier = getTierForMinutes(estimatedMinutes);
+  return tier.maxFeeDollars;
+}
+
+/** Returns the tier matching the given minutes value. Falls back to the last tier. */
+export function getTierForMinutes(minutes: number): WaitTier {
+  if (minutes < 15) return WAIT_TIERS[0];
+  if (minutes < 30) return WAIT_TIERS[1];
+  return WAIT_TIERS[2];
+}

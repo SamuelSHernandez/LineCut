@@ -44,6 +44,8 @@ interface SellerSessionRow {
   started_at: string;
   ended_at: string | null;
   wait_duration_minutes: number | null;
+  estimated_wait_minutes: number | null;
+  seller_fee_cents: number | null;
   status: "active" | "winding_down" | "completed" | "cancelled";
   created_at: string;
   // Supabase returns joined rows as an array even for one-to-one relations
@@ -81,11 +83,13 @@ function sessionToSeller(
     restaurantId: session.restaurantId,
     firstName,
     lastInitial,
-    positionInLine: 1, // not stored yet — placeholder
-    waitEstimate: `~${Math.max(5, 15 - elapsedMins)} min`,
+    positionInLine: 1,
+    waitEstimate: session.estimatedWaitMinutes
+      ? `~${session.estimatedWaitMinutes} min`
+      : `~${Math.max(5, 15 - elapsedMins)} min`,
     trustScore,
     completedOrders: 0,
-    fee: 5.0, // not stored yet — placeholder
+    fee: session.sellerFeeCents ? session.sellerFeeCents / 100 : 5.0,
     menuFlexibility: "full",
     status: "available",
     joinedAt: session.startedAt,
@@ -162,7 +166,7 @@ export function SellerPresenceProvider({ children }: SellerPresenceProviderProps
       const { data, error } = await supabase
         .from("seller_sessions")
         .select(
-          "id, seller_id, restaurant_id, started_at, ended_at, wait_duration_minutes, status, created_at, profiles(display_name, trust_score, avg_rating, rating_count, max_order_cap)"
+          "id, seller_id, restaurant_id, started_at, ended_at, wait_duration_minutes, estimated_wait_minutes, seller_fee_cents, status, created_at, profiles(display_name, trust_score, avg_rating, rating_count, max_order_cap)"
         )
         .eq("status", "active");
 

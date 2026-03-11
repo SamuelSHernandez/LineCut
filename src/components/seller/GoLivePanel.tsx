@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Restaurant, SellerSession } from "@/lib/types";
 import { goLive, endSession } from "@/app/(dashboard)/seller/actions";
 import ConnectStripeButton from "./ConnectStripeButton";
+import { WAIT_TIERS, getTierForMinutes, type WaitTier } from "@/lib/fee-tiers";
 import {
   useGeofence,
   getCurrentPosition,
@@ -44,6 +45,7 @@ interface GoLivePanelProps {
   activeSession: SellerSession | null;
   stripeConnectStatus?: "not_connected" | "pending" | "active" | "restricted";
   kycStatus?: "none" | "pending" | "approved" | "declined";
+  suggestedWaitMinutes?: number | null;
 }
 
 export default function GoLivePanel({
@@ -51,6 +53,7 @@ export default function GoLivePanel({
   activeSession: initialSession,
   stripeConnectStatus = "not_connected",
   kycStatus = "none",
+  suggestedWaitMinutes = null,
 }: GoLivePanelProps) {
   const [selectedRestaurant, setSelectedRestaurant] = useState(
     restaurants[0]?.id ?? ""
@@ -59,9 +62,19 @@ export default function GoLivePanel({
   const elapsed = useElapsedTime(activeSession?.startedAt ?? null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [positionInLine, setPositionInLine] = useState("1");
+  const [selectedTier, setSelectedTier] = useState<WaitTier | null>(
+    suggestedWaitMinutes ? getTierForMinutes(suggestedWaitMinutes) : null
+  );
   const [fee, setFee] = useState("5.00");
   const router = useRouter();
+
+  function handleSelectTier(tier: WaitTier) {
+    setSelectedTier(tier);
+    const currentFee = parseFloat(fee);
+    if (!isNaN(currentFee) && currentFee > tier.maxFeeDollars) {
+      setFee(tier.maxFeeDollars.toFixed(2));
+    }
+  }
 
   // Resolve the currently selected restaurant object for geofence targeting
   const selectedRestaurantObj = restaurants.find(
@@ -84,6 +97,7 @@ export default function GoLivePanel({
   const canGoLive =
     !isPending &&
     !!selectedRestaurant &&
+    !!selectedTier &&
     geofence.status !== "checking" &&
     geofence.status !== "outside";
 
@@ -134,7 +148,11 @@ export default function GoLivePanel({
         }
       }
 
-      const result = await goLive(selectedRestaurant, coords);
+      const feeCents = Math.round(parseFloat(fee) * 100);
+      const result = await goLive(selectedRestaurant, coords, {
+        estimatedWaitMinutes: selectedTier!.representativeMinutes,
+        sellerFeeCents: feeCents,
+      });
 
       if (result.error === "billing_gate" && "redirectUrl" in result) {
         router.push(result.redirectUrl as string);
@@ -202,12 +220,22 @@ export default function GoLivePanel({
           {activeRestaurant?.name ?? "Unknown restaurant"}
         </p>
         <p
-          className="font-[family-name:var(--font-mono)] text-[28px] tracking-[2px] text-chalkboard mb-5"
+          className="font-[family-name:var(--font-mono)] text-[28px] tracking-[2px] text-chalkboard mb-3"
           aria-label={`Session elapsed time: ${elapsed}`}
           aria-live="off"
         >
           {elapsed}
         </p>
+        {(activeSession.estimatedWaitMinutes || activeSession.sellerFeeCents) && (
+          <div className="flex gap-4 mb-5 font-[family-name:var(--font-body)] text-[13px] text-sidewalk">
+            {activeSession.estimatedWaitMinutes && (
+              <span>Est. wait: ~{activeSession.estimatedWaitMinutes} min</span>
+            )}
+            {activeSession.sellerFeeCents && (
+              <span>Your fee: ${(activeSession.sellerFeeCents / 100).toFixed(2)}</span>
+            )}
+          </div>
+        )}
 
         {error && (
           <p className="font-[family-name:var(--font-body)] text-[13px] text-ketchup mb-3" role="alert">
@@ -322,24 +350,34 @@ export default function GoLivePanel({
             </div>
           </fieldset>
 
-          {/* Position in line */}
-          <div className="mb-4">
-            <label
-              htmlFor="position-in-line"
-              className="block font-[family-name:var(--font-mono)] text-[11px] tracking-[2px] uppercase text-sidewalk mb-2"
-            >
-              YOUR SPOT IN LINE
-            </label>
-            <input
-              id="position-in-line"
-              type="number"
-              min="1"
-              max="99"
-              value={positionInLine}
-              onChange={(e) => setPositionInLine(e.target.value)}
-              className="w-full min-h-[48px] px-4 bg-butcher-paper rounded-[6px] border border-[#ddd4c4] font-[family-name:var(--font-body)] text-[14px] text-chalkboard focus:outline-none focus:border-mustard focus:ring-2 focus:ring-mustard/50 transition-colors"
-            />
-          </div>
+          {/* Wait estimate picker */}
+          <fieldset className="mb-4 border-none p-0 m-0">
+            <legend className="block font-[family-name:var(--font-mono)] text-[11px] tracking-[2px] uppercase text-sidewalk mb-2">
+              ESTIMATED WAIT
+            </legend>
+            <div className="grid grid-cols-3 gap-2" role="radiogroup">
+              {WAIT_TIERS.map((tier) => (
+                <button
+                  key={tier.representativeMinutes}
+                  type="button"
+                  role="radio"
+                  aria-checked={selectedTier?.representativeMinutes === tier.representativeMinutes}
+                  onClick={() => handleSelectTier(tier)}
+                  className={`text-center px-2 py-3 rounded-[6px] font-[family-name:var(--font-body)] transition-colors focus:outline-none focus:ring-2 focus:ring-mustard/50 ${
+                    selectedTier?.representativeMinutes === tier.representativeMinutes
+                      ? "bg-[#FFF3D6] border-2 border-mustard text-chalkboard"
+                      : "bg-butcher-paper border border-[#ddd4c4] text-sidewalk hover:border-mustard"
+                  }`}
+                >
+                  <span className="block text-[14px] font-semibold">{tier.label}</span>
+                  <span className="block text-[11px] mt-0.5">{tier.description}</span>
+                  <span className="block text-[10px] mt-1 font-[family-name:var(--font-mono)] tracking-[1px]">
+                    up to ${tier.maxFeeDollars}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </fieldset>
 
           {/* Fee */}
           <div className="mb-4">
@@ -353,12 +391,17 @@ export default function GoLivePanel({
               id="seller-fee"
               type="number"
               min="1"
-              max="20"
+              max={selectedTier?.maxFeeDollars ?? 10}
               step="0.50"
               value={fee}
               onChange={(e) => setFee(e.target.value)}
               className="w-full min-h-[48px] px-4 bg-butcher-paper rounded-[6px] border border-[#ddd4c4] font-[family-name:var(--font-body)] text-[14px] text-chalkboard focus:outline-none focus:border-mustard focus:ring-2 focus:ring-mustard/50 transition-colors"
             />
+            {selectedTier && (
+              <p className="font-[family-name:var(--font-mono)] text-[11px] tracking-[1px] text-sidewalk mt-1">
+                Max ${selectedTier.maxFeeDollars} for this wait
+              </p>
+            )}
           </div>
 
           {/* Desktop degraded experience notice — shown before first check */}

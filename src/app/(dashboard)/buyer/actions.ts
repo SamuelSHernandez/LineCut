@@ -18,8 +18,8 @@ interface PlaceOrderInput {
 }
 
 function calculatePlatformFee(itemsSubtotal: number): number {
-  const fee = itemsSubtotal * 0.15;
-  return Math.min(Math.max(fee, 1.0), 8.0);
+  const fee = itemsSubtotal * 0.10;
+  return Math.min(Math.max(fee, 0.50), 5.0);
 }
 
 export async function placeOrder(input: PlaceOrderInput) {
