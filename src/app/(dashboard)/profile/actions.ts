@@ -64,6 +64,7 @@ export async function updateProfile(
     .eq("id", user.id);
 
   if (error) {
+    console.error("[updateProfile] Supabase error:", error.message, error.code, error.details);
     return { error: "Failed to update profile. Please try again." };
   }
 
