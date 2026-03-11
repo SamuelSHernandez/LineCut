@@ -51,8 +51,8 @@ function CardForm() {
 
     setSuccess(true);
     setSaving(false);
-    // Reload to reflect webhook-updated payment method
-    setTimeout(() => window.location.reload(), 1500);
+    // Give webhook time to update the profile before reloading
+    setTimeout(() => window.location.reload(), 4000);
   }
 
   if (success) {

@@ -41,15 +41,21 @@ export async function POST(req: NextRequest) {
     case "setup_intent.succeeded": {
       const setupIntent = event.data.object as Stripe.SetupIntent;
       const userId = setupIntent.metadata?.supabase_user_id;
-      if (!userId) break;
+      console.log("[webhook] setup_intent.succeeded — userId:", userId, "pm:", setupIntent.payment_method);
+
+      if (!userId) {
+        console.error("[webhook] No supabase_user_id in metadata, skipping");
+        break;
+      }
 
       // Retrieve the payment method details
       const pm = await stripe.paymentMethods.retrieve(
         setupIntent.payment_method as string
       );
+      console.log("[webhook] Payment method card:", pm.card?.brand, pm.card?.last4);
 
       if (pm.card) {
-        await supabase
+        const { error: updateError, count } = await supabase
           .from("profiles")
           .update({
             payment_method_last4: pm.card.last4,
@@ -57,7 +63,10 @@ export async function POST(req: NextRequest) {
             payment_method_exp_month: pm.card.exp_month,
             payment_method_exp_year: pm.card.exp_year,
           })
-          .eq("id", userId);
+          .eq("id", userId)
+          .select("id", { count: "exact", head: true });
+
+        console.log("[webhook] Profile update result — error:", updateError, "count:", count);
       }
       break;
     }
