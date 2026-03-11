@@ -20,7 +20,7 @@ export default async function RestaurantDetailPage({
   }
 
   const sellers = getSellersByRestaurant(id);
-  const menuItems = getMenuItemsByRestaurant(id);
+  const menuItems = await getMenuItemsByRestaurant(id);
 
   // Compute stats from hardcoded sellers for the header
   const availableSellers = sellers.filter((s) => s.status === "available");

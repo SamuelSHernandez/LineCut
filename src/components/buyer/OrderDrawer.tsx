@@ -261,7 +261,7 @@ export default function OrderDrawer({
               ref={closeButtonRef}
               type="button"
               onClick={onClose}
-              className="w-11 h-11 flex items-center justify-center text-sidewalk hover:text-chalkboard transition-colors rounded-[6px] focus:outline-none focus:ring-2 focus:ring-ketchup/20"
+              className="w-11 h-11 flex items-center justify-center text-sidewalk hover:text-chalkboard transition-colors rounded-[6px] focus:outline-none focus:ring-2 focus:ring-ketchup/50"
               aria-label="Close order drawer"
             >
               <svg
@@ -376,7 +376,7 @@ export default function OrderDrawer({
                   placeholder="Extra mustard, no pickles, etc."
                   rows={2}
                   aria-label="Special instructions for your order"
-                  className="w-full bg-butcher-paper rounded-[6px] border border-[#ddd4c4] px-3 py-2 font-[family-name:var(--font-body)] text-[13px] text-chalkboard placeholder:text-sidewalk focus:outline-none focus:border-ketchup focus:ring-2 focus:ring-ketchup/20 transition-colors resize-none"
+                  className="w-full bg-butcher-paper rounded-[6px] border border-[#ddd4c4] px-3 py-2 font-[family-name:var(--font-body)] text-[13px] text-chalkboard placeholder:text-sidewalk focus:outline-none focus:border-ketchup focus:ring-2 focus:ring-ketchup/50 transition-colors resize-none"
                 />
               </div>
 
@@ -389,6 +389,7 @@ export default function OrderDrawer({
                   items={orderItemsArray}
                   sellerName={seller.firstName}
                   sellerFee={seller.fee}
+                  sellerMaxCap={seller.maxOrderCap}
                   onConfirm={handleConfirm}
                   disabled={placing}
                 />

@@ -1,6 +1,7 @@
 "use client";
 
 import type { Seller } from "@/lib/types";
+import StarRating from "@/components/shared/StarRating";
 
 interface SellerCardProps {
   seller: Seller;
@@ -36,8 +37,8 @@ export default function SellerCard({
         isBusy
           ? `${seller.firstName} ${seller.lastInitial}. is busy`
           : isSelected
-            ? `Open order drawer for ${seller.firstName} ${seller.lastInitial}., $${seller.fee.toFixed(2)} fee, trust score ${seller.trustScore}, ${seller.waitEstimate} wait`
-            : `Select ${seller.firstName} ${seller.lastInitial}., $${seller.fee.toFixed(2)} fee, trust score ${seller.trustScore}, ${seller.waitEstimate} wait`
+            ? `Open order drawer for ${seller.firstName} ${seller.lastInitial}., $${seller.fee.toFixed(2)} fee, ${seller.avgRating !== null ? `${seller.avgRating} stars` : "no ratings yet"}, ${seller.waitEstimate} wait`
+            : `Select ${seller.firstName} ${seller.lastInitial}., $${seller.fee.toFixed(2)} fee, ${seller.avgRating !== null ? `${seller.avgRating} stars` : "no ratings yet"}, ${seller.waitEstimate} wait`
       }
       className={`w-full text-left bg-ticket rounded-[10px] p-5 shadow-[0_4px_20px_rgba(0,0,0,0.06)] transition-all duration-200 ${
         isSelected
@@ -59,12 +60,18 @@ export default function SellerCard({
               <span className="font-[family-name:var(--font-body)] text-[15px] font-semibold text-chalkboard">
                 {seller.firstName} {seller.lastInitial}.
               </span>
-              <span
-                className="inline-flex items-center px-2 py-0.5 rounded-full bg-[#DDEFDD] font-[family-name:var(--font-mono)] text-[10px] tracking-[0.5px] text-[#2D6A2D]"
-                aria-label={`Trust score: ${seller.trustScore}`}
-              >
-                {seller.trustScore}
-              </span>
+              {seller.avgRating !== null ? (
+                <span className="inline-flex items-center gap-1">
+                  <StarRating value={Math.round(seller.avgRating)} size="sm" />
+                  <span className="font-[family-name:var(--font-mono)] text-[10px] text-sidewalk">
+                    {seller.avgRating} ({seller.ratingCount})
+                  </span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-[#E8E8E8] font-[family-name:var(--font-mono)] text-[10px] tracking-[0.5px] text-[#4D4D4D]">
+                  New
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -107,6 +114,14 @@ export default function SellerCard({
             {seller.completedOrders}
           </p>
         </div>
+        <div>
+          <p className="font-[family-name:var(--font-mono)] text-[10px] text-sidewalk uppercase tracking-[1.5px]">
+            MAX
+          </p>
+          <p className="font-[family-name:var(--font-display)] text-[18px] tracking-[1px] leading-tight">
+            ${Math.round(seller.maxOrderCap / 100)}
+          </p>
+        </div>
       </div>
 
       {/* Row 3: Flexibility */}
@@ -116,7 +131,7 @@ export default function SellerCard({
 
       {/* Row 4: Action */}
       {isBusy ? (
-        <span className="inline-flex items-center px-3 py-1 rounded-full bg-[#E8E8E8] font-[family-name:var(--font-body)] text-[11px] font-semibold uppercase tracking-[0.3px] text-[#666666]">
+        <span className="inline-flex items-center px-3 py-1 rounded-full bg-[#E8E8E8] font-[family-name:var(--font-body)] text-[11px] font-semibold uppercase tracking-[0.3px] text-[#4D4D4D]">
           BUSY
         </span>
       ) : isSelected ? (

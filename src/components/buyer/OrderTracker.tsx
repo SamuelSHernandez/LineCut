@@ -1,7 +1,19 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import type { Order, OrderStatus } from "@/lib/types";
+import ReviewForm from "@/components/shared/ReviewForm";
+import DisputeForm from "@/components/shared/DisputeForm";
+import ChatPanel from "@/components/shared/ChatPanel";
+import { useProfile } from "@/lib/profile-context";
+import { useGeofence, formatDistanceMeters } from "@/lib/use-geofence";
+import { restaurants } from "@/lib/restaurant-data";
+import BlockReportButtons from "@/components/shared/BlockReportButtons";
+import { confirmBuyerHandoff } from "@/app/(dashboard)/buyer/order-actions";
+import { getTipForOrder } from "@/app/(dashboard)/buyer/tip-actions";
+import TipPanel from "@/components/buyer/TipPanel";
+import { createClient } from "@/lib/supabase/client";
+import { READY_TIMEOUT_MS, READY_REMINDER_MS } from "@/lib/orders/state-machine";
 
 interface OrderTrackerProps {
   order: Order;
@@ -48,15 +60,46 @@ function getStepIndex(status: OrderStatus): number {
 }
 
 export default function OrderTracker({ order, onCancel }: OrderTrackerProps) {
+  const profile = useProfile();
+  const userId = profile.id;
   const currentIndex = getStepIndex(order.status);
   const [showBanner, setShowBanner] = useState(false);
+  const [showReadySplash, setShowReadySplash] = useState(false);
   const prevStatusRef = useRef(order.status);
+
+  // Handoff state
+  const [buyerConfirmed, setBuyerConfirmed] = useState(false);
+  const [sellerConfirmed, setSellerConfirmed] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+
+  // Geofence
+  const restaurant = restaurants.find((r) => r.id === order.restaurantId);
+  const geofence = useGeofence({
+    lat: restaurant?.lat ?? 0,
+    lng: restaurant?.lng ?? 0,
+    radiusMeters: 200,
+  });
+  const [geofenceChecked, setGeofenceChecked] = useState(false);
+
+  // Tip state
+  const [existingTip, setExistingTip] = useState<{ amount: number; status: string } | null>(null);
+  const [tipLoaded, setTipLoaded] = useState(false);
+
+  // Ready-state timer
+  const [elapsedSinceReady, setElapsedSinceReady] = useState(0);
+  const [showReminder, setShowReminder] = useState(false);
 
   // Show notification banner when status changes
   useEffect(() => {
     if (order.status !== prevStatusRef.current) {
+      const wasReady = prevStatusRef.current !== "ready" && order.status === "ready";
       prevStatusRef.current = order.status;
-      // Use queueMicrotask to avoid synchronous setState in effect body
+
+      if (wasReady) {
+        setShowReadySplash(true);
+      }
+
       const showTimer = setTimeout(() => setShowBanner(true), 0);
       const hideTimer = setTimeout(() => setShowBanner(false), 5000);
       return () => {
@@ -66,11 +109,122 @@ export default function OrderTracker({ order, onCancel }: OrderTrackerProps) {
     }
   }, [order.status]);
 
+  // Fetch existing tip when order is completed
+  useEffect(() => {
+    if (order.status !== "completed") return;
+    let cancelled = false;
+    getTipForOrder(order.id).then(({ tip }) => {
+      if (!cancelled) {
+        setExistingTip(tip);
+        setTipLoaded(true);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [order.id, order.status]);
+
+  // Fetch handoff confirmations on mount / when status is ready
+  useEffect(() => {
+    if (order.status !== "ready") return;
+
+    const supabase = createClient();
+    supabase
+      .from("handoff_confirmations")
+      .select("role")
+      .eq("order_id", order.id)
+      .then(({ data }) => {
+        if (data) {
+          setBuyerConfirmed(data.some((c) => c.role === "buyer"));
+          setSellerConfirmed(data.some((c) => c.role === "seller"));
+        }
+      });
+  }, [order.id, order.status]);
+
+  // Ready-state elapsed timer
+  useEffect(() => {
+    if (order.status !== "ready" || !order.readyAt) return;
+
+    function tick() {
+      const elapsed = Date.now() - new Date(order.readyAt!).getTime();
+      setElapsedSinceReady(elapsed);
+      if (elapsed >= READY_REMINDER_MS && !showReminder) {
+        setShowReminder(true);
+      }
+    }
+
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [order.status, order.readyAt, showReminder]);
+
+  const handleConfirmHandoff = useCallback(async () => {
+    // If geofence hasn't been checked yet, trigger it
+    if (!geofenceChecked && geofence.status === "idle") {
+      geofence.check();
+      setGeofenceChecked(true);
+      return;
+    }
+
+    // If geofence is currently checking, wait
+    if (geofence.status === "checking") return;
+
+    // For outside, denied, or unavailable — allow with appropriate messaging
+    // (soft gate per plan)
+
+    setIsConfirming(true);
+    setConfirmError(null);
+    try {
+      const result = await confirmBuyerHandoff(order.id);
+      if (result.error) {
+        setConfirmError(result.error);
+      } else {
+        setBuyerConfirmed(true);
+      }
+    } catch {
+      setConfirmError("Something went wrong. Try again.");
+    } finally {
+      setIsConfirming(false);
+    }
+  }, [order.id, geofence, geofenceChecked]);
+
+  // After geofence check completes, auto-proceed to confirm if inside
+  useEffect(() => {
+    if (geofenceChecked && geofence.status === "inside" && !buyerConfirmed && !isConfirming) {
+      handleConfirmHandoff();
+    }
+  }, [geofenceChecked, geofence.status, buyerConfirmed, isConfirming, handleConfirmHandoff]);
+
   const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
+  const chatStatuses: OrderStatus[] = ["accepted", "in-progress", "ready"];
+  const showChat = chatStatuses.includes(order.status);
+
+  const elapsedMinutes = Math.floor(elapsedSinceReady / 60000);
+  const elapsedSeconds = Math.floor((elapsedSinceReady % 60000) / 1000);
 
   return (
     <div className="space-y-5">
-      {/* Status change banner — persistent aria-live container so screen readers catch updates */}
+      {/* Ready splash overlay */}
+      {showReadySplash && (
+        <button
+          type="button"
+          onClick={() => setShowReadySplash(false)}
+          className="fixed inset-0 z-50 bg-ketchup flex flex-col items-center justify-center text-center p-6 cursor-pointer"
+        >
+          <p className="font-[family-name:var(--font-display)] text-[32px] tracking-[2px] text-ticket mb-4">
+            YOUR FOOD IS READY
+          </p>
+          <p className="font-[family-name:var(--font-body)] text-[16px] text-ticket/80 mb-2">
+            {order.restaurantName}
+          </p>
+          <p className="font-[family-name:var(--font-body)] text-[14px] text-ticket/60">
+            Pick up from {order.sellerName}
+          </p>
+          <p className="font-[family-name:var(--font-mono)] text-[11px] text-ticket/40 mt-8">
+            Tap anywhere to dismiss
+          </p>
+        </button>
+      )}
+
+      {/* Status change banner */}
       <div role="status" aria-live="polite" aria-atomic="true">
         {showBanner && (
           <div className="bg-[#DDEFDD] border border-[#2D6A2D]/20 rounded-[6px] px-4 py-3 transition-opacity duration-300">
@@ -83,7 +237,6 @@ export default function OrderTracker({ order, onCancel }: OrderTrackerProps) {
 
       {/* Vertical stepper */}
       <div className="relative pl-8" role="list" aria-label="Order progress">
-        {/* Vertical line */}
         <div
           className="absolute left-[11px] top-3 bottom-3 w-[2px] bg-[#ddd4c4]"
           aria-hidden="true"
@@ -100,7 +253,6 @@ export default function OrderTracker({ order, onCancel }: OrderTrackerProps) {
               role="listitem"
               className="relative pb-6 last:pb-0"
             >
-              {/* Circle indicator */}
               <div
                 className={`absolute left-[-20px] top-[2px] w-[22px] h-[22px] rounded-full border-2 flex items-center justify-center ${
                   isCompleted
@@ -117,11 +269,10 @@ export default function OrderTracker({ order, onCancel }: OrderTrackerProps) {
                   </svg>
                 )}
                 {isCurrent && (
-                  <span className="w-2 h-2 rounded-full bg-ticket animate-pulse" />
+                  <span className="w-2 h-2 rounded-full bg-ticket animate-pulse motion-reduce:animate-none" />
                 )}
               </div>
 
-              {/* Step content */}
               <div>
                 <p
                   className={`font-[family-name:var(--font-display)] text-[16px] tracking-[1px] ${
@@ -146,6 +297,117 @@ export default function OrderTracker({ order, onCancel }: OrderTrackerProps) {
           );
         })}
       </div>
+
+      {/* Hand-off confirmation area — when ready */}
+      {order.status === "ready" && (
+        <div className="space-y-3">
+          <div className="border-t border-dashed border-[#ddd4c4]" />
+
+          {/* Elapsed time */}
+          {order.readyAt && (
+            <p className="font-[family-name:var(--font-mono)] text-[11px] text-sidewalk text-center" aria-live="off" aria-label={`Ready for ${elapsedMinutes} minutes and ${elapsedSeconds} seconds`}>
+              Ready for {elapsedMinutes}:{String(elapsedSeconds).padStart(2, "0")}
+            </p>
+          )}
+
+          {/* Confirmation badges */}
+          <div className="flex items-center justify-center gap-4">
+            <div className="flex items-center gap-1.5">
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
+                sellerConfirmed ? "bg-[#2D6A2D]" : "bg-[#ddd4c4]"
+              }`}>
+                {sellerConfirmed ? (
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                    <path d="M2.5 6L5 8.5L9.5 3.5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                ) : (
+                  <span className="w-1.5 h-1.5 rounded-full bg-white/50 animate-pulse motion-reduce:animate-none" />
+                )}
+              </div>
+              <span className="font-[family-name:var(--font-mono)] text-[10px] tracking-[1px] text-sidewalk">
+                SELLER
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
+                buyerConfirmed ? "bg-[#2D6A2D]" : "bg-[#ddd4c4]"
+              }`}>
+                {buyerConfirmed ? (
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                    <path d="M2.5 6L5 8.5L9.5 3.5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                ) : (
+                  <span className="w-1.5 h-1.5 rounded-full bg-white/50 animate-pulse motion-reduce:animate-none" />
+                )}
+              </div>
+              <span className="font-[family-name:var(--font-mono)] text-[10px] tracking-[1px] text-sidewalk">
+                YOU
+              </span>
+            </div>
+          </div>
+
+          {/* Status text */}
+          {sellerConfirmed && !buyerConfirmed && (
+            <p className="font-[family-name:var(--font-body)] text-[13px] text-[#2D6A2D] text-center font-semibold">
+              {order.sellerName} confirmed — tap to complete
+            </p>
+          )}
+          {buyerConfirmed && !sellerConfirmed && (
+            <p className="font-[family-name:var(--font-body)] text-[13px] text-sidewalk text-center">
+              Waiting for {order.sellerName} to confirm...
+            </p>
+          )}
+
+          {/* Geofence feedback */}
+          {geofenceChecked && geofence.status === "outside" && geofence.distanceMeters && (
+            <div className="bg-[#FFF3D6] border border-[#8B6914]/20 rounded-[6px] px-3 py-2">
+              <p className="font-[family-name:var(--font-body)] text-[12px] text-[#8B6914]">
+                You appear to be {formatDistanceMeters(geofence.distanceMeters)} from {order.restaurantName}. Are you sure you&apos;re picking up?
+              </p>
+            </div>
+          )}
+          {geofenceChecked && (geofence.status === "denied" || geofence.status === "unavailable") && (
+            <div className="bg-[#FFF3D6] border border-[#8B6914]/20 rounded-[6px] px-3 py-2">
+              <p className="font-[family-name:var(--font-body)] text-[12px] text-[#8B6914]">
+                We couldn&apos;t verify your location. By confirming, you&apos;re saying you received your food.
+              </p>
+            </div>
+          )}
+
+          {confirmError && (
+            <div role="alert" className="bg-[#FDECEA] text-ketchup font-[family-name:var(--font-body)] text-[12px] px-3 py-2 rounded-[6px]">
+              {confirmError}
+            </div>
+          )}
+
+          {/* Confirm button */}
+          {!buyerConfirmed && (
+            <button
+              type="button"
+              onClick={handleConfirmHandoff}
+              disabled={isConfirming || geofence.status === "checking"}
+              className="w-full min-h-[48px] bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] tracking-[1px] active:scale-[0.98] transition-transform focus:outline-none focus:ring-2 focus:ring-ketchup/50 disabled:opacity-60"
+            >
+              {geofence.status === "checking"
+                ? "Checking location..."
+                : isConfirming
+                  ? "..."
+                  : geofenceChecked && geofence.status === "outside"
+                    ? "CONFIRM ANYWAY"
+                    : "CONFIRM HAND-OFF"}
+            </button>
+          )}
+
+          {/* Reminder prompt at 10 min */}
+          {showReminder && !buyerConfirmed && elapsedSinceReady < READY_TIMEOUT_MS && (
+            <div className="bg-[#FFF3D6] border border-[#8B6914]/20 rounded-[6px] px-3 py-2 text-center">
+              <p className="font-[family-name:var(--font-body)] text-[12px] text-[#8B6914] font-semibold">
+                Your order has been ready for {elapsedMinutes} min. Are you coming?
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Dashed divider */}
       <div className="border-t border-dashed border-[#ddd4c4]" />
@@ -184,6 +446,52 @@ export default function OrderTracker({ order, onCancel }: OrderTrackerProps) {
         </p>
       </div>
 
+      {/* Chat panel — active orders */}
+      {showChat && (
+        <ChatPanel
+          orderId={order.id}
+          userId={userId}
+          otherPartyName={order.sellerName}
+        />
+      )}
+
+      {/* Review form and tip — when completed */}
+      {order.status === "completed" && (
+        <>
+          <ReviewForm
+            orderId={order.id}
+            otherPartyName={order.sellerName}
+            role="buyer"
+          />
+          {tipLoaded && (
+            <TipPanel
+              orderId={order.id}
+              sellerName={order.sellerName}
+              existingTip={existingTip}
+            />
+          )}
+          <DisputeForm orderId={order.id} otherPartyName={order.sellerName} />
+          <div className="border-t border-dashed border-[#ddd4c4] mt-3 pt-2" />
+          <BlockReportButtons
+            targetUserId={order.sellerId}
+            targetName={order.sellerName}
+            orderId={order.id}
+          />
+        </>
+      )}
+
+      {/* Block/report after cancelled orders too */}
+      {order.status === "cancelled" && (
+        <>
+          <div className="border-t border-dashed border-[#ddd4c4] mt-1 pt-2" />
+          <BlockReportButtons
+            targetUserId={order.sellerId}
+            targetName={order.sellerName}
+            orderId={order.id}
+          />
+        </>
+      )}
+
       {/* Cancel button — only while pending */}
       {order.status === "pending" && (
         <>
@@ -191,7 +499,7 @@ export default function OrderTracker({ order, onCancel }: OrderTrackerProps) {
           <button
             type="button"
             onClick={onCancel}
-            className="w-full min-h-[48px] py-3 px-6 bg-butcher-paper border border-ketchup text-ketchup font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] transition-colors hover:bg-ketchup hover:text-ticket focus:outline-none focus:ring-2 focus:ring-ketchup/20"
+            className="w-full min-h-[48px] py-3 px-6 bg-butcher-paper border border-ketchup text-ketchup font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] transition-colors hover:bg-ketchup hover:text-ticket focus:outline-none focus:ring-2 focus:ring-ketchup/50"
           >
             CANCEL ORDER
           </button>

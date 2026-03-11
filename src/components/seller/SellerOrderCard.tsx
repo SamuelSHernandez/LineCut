@@ -1,14 +1,21 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { Order, OrderStatus } from "@/lib/types";
-import { PENDING_TIMEOUT_MS } from "@/lib/orders/state-machine";
+import ReviewForm from "@/components/shared/ReviewForm";
+import DisputeForm from "@/components/shared/DisputeForm";
+import BlockReportButtons from "@/components/shared/BlockReportButtons";
+import ChatPanel from "@/components/shared/ChatPanel";
+import { PENDING_TIMEOUT_MS, READY_TIMEOUT_MS } from "@/lib/orders/state-machine";
+import { useProfile } from "@/lib/profile-context";
+import { createClient } from "@/lib/supabase/client";
 import {
   acceptOrder,
   declineOrder,
   markInProgress,
   markReady,
   markCompleted,
+  forceComplete,
 } from "@/app/(dashboard)/seller/order-actions";
 
 interface SellerOrderCardProps {
@@ -35,11 +42,11 @@ function getStatusBadge(status: OrderStatus) {
     case "ready":
       return { label: "READY", bg: "bg-[#FDECEA]", text: "text-[#C4382A]" };
     case "completed":
-      return { label: "COMPLETE", bg: "bg-[#E8E8E8]", text: "text-[#666]" };
+      return { label: "COMPLETE", bg: "bg-[#E8E8E8]", text: "text-[#4D4D4D]" };
     case "cancelled":
-      return { label: "CANCELLED", bg: "bg-[#E8E8E8]", text: "text-[#666]" };
+      return { label: "CANCELLED", bg: "bg-[#E8E8E8]", text: "text-[#4D4D4D]" };
     default:
-      return { label: (status as string).toUpperCase(), bg: "bg-[#E8E8E8]", text: "text-[#666]" };
+      return { label: (status as string).toUpperCase(), bg: "bg-[#E8E8E8]", text: "text-[#4D4D4D]" };
   }
 }
 
@@ -55,11 +62,20 @@ export default function SellerOrderCard({
   buyerName,
   onStatusChange,
 }: SellerOrderCardProps) {
+  const profile = useProfile();
   const [timeAgo, setTimeAgo] = useState(() => getTimeAgo(order.createdAt));
   const [isProcessing, setIsProcessing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [autoExpireSeconds, setAutoExpireSeconds] = useState<number | null>(null);
   const badge = getStatusBadge(order.status);
+
+  // Handoff state
+  const [sellerConfirmed, setSellerConfirmed] = useState(false);
+  const [buyerConfirmed, setBuyerConfirmed] = useState(false);
+
+  // Ready-state timeout
+  const [readyExpireSeconds, setReadyExpireSeconds] = useState<number | null>(null);
+  const [readyExpired, setReadyExpired] = useState(false);
 
   // ── Time-ago ticker ───────────────────────────────────────
   useEffect(() => {
@@ -68,6 +84,23 @@ export default function SellerOrderCard({
     }, 30000);
     return () => clearInterval(interval);
   }, [order.createdAt]);
+
+  // ── Fetch handoff confirmations ───────────────────────────
+  useEffect(() => {
+    if (order.status !== "ready") return;
+
+    const supabase = createClient();
+    supabase
+      .from("handoff_confirmations")
+      .select("role")
+      .eq("order_id", order.id)
+      .then(({ data }) => {
+        if (data) {
+          setSellerConfirmed(data.some((c) => c.role === "seller"));
+          setBuyerConfirmed(data.some((c) => c.role === "buyer"));
+        }
+      });
+  }, [order.id, order.status]);
 
   // ── Auto-cancel countdown for pending orders ──────────────
   useEffect(() => {
@@ -84,7 +117,6 @@ export default function SellerOrderCard({
       setAutoExpireSeconds(remaining);
 
       if (remaining <= 0) {
-        // Auto-decline
         handleAction("cancelled");
       }
     }
@@ -95,6 +127,31 @@ export default function SellerOrderCard({
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order.status, order.createdAt, order.id]);
+
+  // ── Ready-state timeout countdown ─────────────────────────
+  useEffect(() => {
+    if (order.status !== "ready" || !order.readyAt) {
+      setReadyExpireSeconds(null);
+      setReadyExpired(false);
+      return;
+    }
+
+    const readyMs = new Date(order.readyAt).getTime();
+    const expiresAt = readyMs + READY_TIMEOUT_MS;
+
+    function tick() {
+      const remaining = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+      setReadyExpireSeconds(remaining);
+
+      if (remaining <= 0) {
+        setReadyExpired(true);
+      }
+    }
+
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [order.status, order.readyAt]);
 
   // ── Server action dispatcher ──────────────────────────────
   const handleAction = useCallback(
@@ -129,8 +186,10 @@ export default function SellerOrderCard({
         if (result.error) {
           setActionError(result.error);
         } else {
-          // Notify parent for optimistic UI update via order bus
           onStatusChange(order.id, newStatus);
+          if (newStatus === "completed") {
+            setSellerConfirmed(true);
+          }
         }
       } catch {
         setActionError("Something went wrong. Try again.");
@@ -141,6 +200,25 @@ export default function SellerOrderCard({
     [isProcessing, onStatusChange, order.id]
   );
 
+  const handleForceComplete = useCallback(async () => {
+    if (isProcessing) return;
+    setIsProcessing(true);
+    setActionError(null);
+
+    try {
+      const result = await forceComplete(order.id);
+      if (result.error) {
+        setActionError(result.error);
+      } else {
+        onStatusChange(order.id, "completed");
+      }
+    } catch {
+      setActionError("Something went wrong. Try again.");
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [isProcessing, onStatusChange, order.id]);
+
   const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
 
   // Format countdown as M:SS
@@ -148,6 +226,14 @@ export default function SellerOrderCard({
     autoExpireSeconds !== null && autoExpireSeconds > 0
       ? `${Math.floor(autoExpireSeconds / 60)}:${String(autoExpireSeconds % 60).padStart(2, "0")}`
       : null;
+
+  const readyCountdownLabel =
+    readyExpireSeconds !== null && readyExpireSeconds > 0
+      ? `${Math.floor(readyExpireSeconds / 60)}:${String(readyExpireSeconds % 60).padStart(2, "0")}`
+      : null;
+
+  const chatStatuses: OrderStatus[] = ["accepted", "in-progress", "ready"];
+  const showChat = chatStatuses.includes(order.status);
 
   return (
     <article
@@ -175,6 +261,7 @@ export default function SellerOrderCard({
           {/* Auto-expire countdown badge for pending orders */}
           {order.status === "pending" && countdownLabel && (
             <span
+              role="timer"
               aria-label={`Auto-expires in ${countdownLabel}`}
               className={`font-[family-name:var(--font-mono)] text-[10px] tracking-[1px] px-2 py-1 rounded-full ${
                 autoExpireSeconds !== null && autoExpireSeconds <= 60
@@ -183,6 +270,20 @@ export default function SellerOrderCard({
               }`}
             >
               {countdownLabel}
+            </span>
+          )}
+          {/* Ready timeout countdown */}
+          {order.status === "ready" && readyCountdownLabel && !readyExpired && (
+            <span
+              role="timer"
+              aria-label={`Buyer pickup time: ${readyCountdownLabel}`}
+              className={`font-[family-name:var(--font-mono)] text-[10px] tracking-[1px] px-2 py-1 rounded-full ${
+                readyExpireSeconds !== null && readyExpireSeconds <= 120
+                  ? "bg-[#FDECEA] text-ketchup"
+                  : "bg-[#FFF3D6] text-[#8B6914]"
+              }`}
+            >
+              {readyCountdownLabel}
             </span>
           )}
           <span
@@ -257,7 +358,7 @@ export default function SellerOrderCard({
             onClick={() => handleAction("accepted")}
             disabled={isProcessing}
             aria-label={`Accept order from ${buyerName}`}
-            className="flex-1 min-h-[48px] bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] tracking-[1px] active:scale-[0.98] transition-transform focus:outline-none focus:ring-2 focus:ring-ketchup/20 disabled:opacity-60"
+            className="flex-1 min-h-[48px] bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] tracking-[1px] active:scale-[0.98] transition-transform focus:outline-none focus:ring-2 focus:ring-ketchup/50 disabled:opacity-60"
           >
             {isProcessing ? "..." : "ACCEPT"}
           </button>
@@ -266,7 +367,7 @@ export default function SellerOrderCard({
             onClick={() => handleAction("cancelled")}
             disabled={isProcessing}
             aria-label={`Decline order from ${buyerName}`}
-            className="min-h-[48px] px-4 text-ketchup font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] active:scale-[0.98] transition-transform focus:outline-none focus:ring-2 focus:ring-ketchup/20 disabled:opacity-60"
+            className="min-h-[48px] px-4 text-ketchup font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] active:scale-[0.98] transition-transform focus:outline-none focus:ring-2 focus:ring-ketchup/50 disabled:opacity-60"
           >
             DECLINE
           </button>
@@ -280,7 +381,7 @@ export default function SellerOrderCard({
             onClick={() => handleAction("in-progress")}
             disabled={isProcessing}
             aria-label={`Mark ${buyerName}'s order as started`}
-            className="w-full min-h-[48px] bg-mustard text-chalkboard font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] tracking-[1px] active:scale-[0.98] transition-transform focus:outline-none focus:ring-2 focus:ring-mustard/30 disabled:opacity-60"
+            className="w-full min-h-[48px] bg-mustard text-chalkboard font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] tracking-[1px] active:scale-[0.98] transition-transform focus:outline-none focus:ring-2 focus:ring-mustard/50 disabled:opacity-60"
           >
             {isProcessing ? "..." : "STARTED ORDERING"}
           </button>
@@ -297,7 +398,7 @@ export default function SellerOrderCard({
             onClick={() => handleAction("ready")}
             disabled={isProcessing}
             aria-label={`Mark ${buyerName}'s order as ready`}
-            className="w-full min-h-[48px] bg-mustard text-chalkboard font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] tracking-[1px] active:scale-[0.98] transition-transform focus:outline-none focus:ring-2 focus:ring-mustard/30 disabled:opacity-60"
+            className="w-full min-h-[48px] bg-mustard text-chalkboard font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] tracking-[1px] active:scale-[0.98] transition-transform focus:outline-none focus:ring-2 focus:ring-mustard/50 disabled:opacity-60"
           >
             {isProcessing ? "..." : "ORDER'S READY"}
           </button>
@@ -307,30 +408,132 @@ export default function SellerOrderCard({
         </div>
       )}
 
-      {order.status === "ready" && (
-        <div>
-          <button
-            type="button"
-            onClick={() => handleAction("completed")}
-            disabled={isProcessing}
-            aria-label={`Mark ${buyerName}'s order as handed off`}
-            className="w-full min-h-[48px] bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] tracking-[1px] active:scale-[0.98] transition-transform focus:outline-none focus:ring-2 focus:ring-ketchup/20 disabled:opacity-60"
-          >
-            {isProcessing ? "..." : "HANDED OFF"}
-          </button>
-          <p className="font-[family-name:var(--font-body)] text-[11px] text-sidewalk text-center mt-1.5">
-            Tap once the buyer has their food.
+      {order.status === "ready" && !readyExpired && (
+        <div className="space-y-3">
+          {/* Confirmation badges */}
+          <div className="flex items-center justify-center gap-4">
+            <div className="flex items-center gap-1.5">
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
+                sellerConfirmed ? "bg-[#2D6A2D]" : "bg-[#ddd4c4]"
+              }`}>
+                {sellerConfirmed ? (
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                    <path d="M2.5 6L5 8.5L9.5 3.5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                ) : (
+                  <span className="w-1.5 h-1.5 rounded-full bg-white/50 animate-pulse motion-reduce:animate-none" />
+                )}
+              </div>
+              <span className="font-[family-name:var(--font-mono)] text-[10px] tracking-[1px] text-sidewalk">
+                YOU
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
+                buyerConfirmed ? "bg-[#2D6A2D]" : "bg-[#ddd4c4]"
+              }`}>
+                {buyerConfirmed ? (
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                    <path d="M2.5 6L5 8.5L9.5 3.5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                ) : (
+                  <span className="w-1.5 h-1.5 rounded-full bg-white/50 animate-pulse motion-reduce:animate-none" />
+                )}
+              </div>
+              <span className="font-[family-name:var(--font-mono)] text-[10px] tracking-[1px] text-sidewalk">
+                BUYER
+              </span>
+            </div>
+          </div>
+
+          {/* Status text */}
+          {buyerConfirmed && !sellerConfirmed && (
+            <p className="font-[family-name:var(--font-body)] text-[13px] text-[#2D6A2D] text-center font-semibold">
+              Buyer confirmed — tap to complete
+            </p>
+          )}
+          {sellerConfirmed && !buyerConfirmed && (
+            <p className="font-[family-name:var(--font-body)] text-[13px] text-sidewalk text-center">
+              Waiting for buyer to confirm...
+            </p>
+          )}
+
+          {!sellerConfirmed && (
+            <button
+              type="button"
+              onClick={() => handleAction("completed")}
+              disabled={isProcessing}
+              aria-label={`Confirm hand-off to ${buyerName}`}
+              className="w-full min-h-[48px] bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] tracking-[1px] active:scale-[0.98] transition-transform focus:outline-none focus:ring-2 focus:ring-ketchup/50 disabled:opacity-60"
+            >
+              {isProcessing ? "..." : "CONFIRM HAND-OFF"}
+            </button>
+          )}
+          <p className="font-[family-name:var(--font-body)] text-[11px] text-sidewalk text-center">
+            Both you and the buyer need to confirm the hand-off.
           </p>
         </div>
       )}
 
-      {/* Terminal states — no actions */}
-      {(order.status === "completed" || order.status === "cancelled") && (
-        <p className="font-[family-name:var(--font-mono)] text-[11px] text-sidewalk text-center">
-          {order.status === "completed"
-            ? "Order complete. Nice work."
-            : "Order was cancelled."}
-        </p>
+      {/* Ready expired — escalation options */}
+      {order.status === "ready" && readyExpired && (
+        <div className="space-y-3">
+          <div className="bg-[#FFF3D6] border border-[#8B6914]/20 rounded-[6px] px-3 py-2 text-center">
+            <p className="font-[family-name:var(--font-body)] text-[13px] text-[#8B6914] font-semibold">
+              Buyer didn&apos;t show
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleForceComplete}
+            disabled={isProcessing}
+            className="w-full min-h-[48px] bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] tracking-[1px] active:scale-[0.98] transition-transform focus:outline-none focus:ring-2 focus:ring-ketchup/50 disabled:opacity-60"
+          >
+            {isProcessing ? "..." : "COMPLETE ANYWAY"}
+          </button>
+        </div>
+      )}
+
+      {/* Chat panel — active orders */}
+      {showChat && (
+        <div className="mt-3">
+          <ChatPanel
+            orderId={order.id}
+            userId={profile.id}
+            otherPartyName={buyerName}
+          />
+        </div>
+      )}
+
+      {/* Terminal states */}
+      {order.status === "completed" && (
+        <>
+          <ReviewForm
+            orderId={order.id}
+            otherPartyName={buyerName}
+            role="seller"
+          />
+          <DisputeForm orderId={order.id} otherPartyName={buyerName} />
+          <div className="border-t border-dashed border-[#ddd4c4] mt-3 pt-2" />
+          <BlockReportButtons
+            targetUserId={order.buyerId}
+            targetName={buyerName}
+            orderId={order.id}
+          />
+        </>
+      )}
+      {order.status === "cancelled" && (
+        <>
+          <p className="font-[family-name:var(--font-mono)] text-[11px] text-sidewalk text-center">
+            Order was cancelled.
+          </p>
+          <div className="border-t border-dashed border-[#ddd4c4] mt-1 pt-2" />
+          <BlockReportButtons
+            targetUserId={order.buyerId}
+            targetName={buyerName}
+            orderId={order.id}
+          />
+        </>
       )}
 
       {/* Timestamp */}

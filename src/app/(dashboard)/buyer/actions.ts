@@ -4,8 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { createOrderPaymentIntent } from "@/lib/stripe/payment-intents";
 import { sendPush } from "@/lib/push";
+import { trackEvent, EVENTS } from "@/lib/analytics";
+import { isBlocked } from "@/lib/blocked-users";
 
-const ORDER_MAX_CENTS = 5000; // $50
+const ORDER_MAX_CENTS = 20000; // $200 absolute max
 
 interface PlaceOrderInput {
   sellerId: string;
@@ -28,6 +30,12 @@ export async function placeOrder(input: PlaceOrderInput) {
 
   if (!user) redirect("/auth/login");
 
+  // Check if either party has blocked the other
+  const blocked = await isBlocked(user.id, input.sellerId);
+  if (blocked) {
+    return { error: "You cannot place an order with this seller." };
+  }
+
   // Server-side price calculation
   const itemsSubtotal = input.items.reduce(
     (sum, item) => sum + item.price * item.quantity,
@@ -42,9 +50,21 @@ export async function placeOrder(input: PlaceOrderInput) {
   const platformFeeCents = Math.round(platformFee * 100);
   const totalCents = Math.round(total * 100);
 
-  // $50 cap check
+  // Absolute platform cap
   if (totalCents > ORDER_MAX_CENTS) {
-    return { error: "Order exceeds $50 maximum." };
+    return { error: "Order exceeds $200 maximum." };
+  }
+
+  // Enforce seller's personal max order cap
+  const { data: sellerProfile } = await supabase
+    .from("profiles")
+    .select("max_order_cap")
+    .eq("id", input.sellerId)
+    .single();
+
+  if (sellerProfile && totalCents > sellerProfile.max_order_cap) {
+    const capDollars = (sellerProfile.max_order_cap / 100).toFixed(0);
+    return { error: `Order exceeds this seller's max of $${capDollars}.` };
   }
 
   // Verify seller has an active session at this restaurant
@@ -111,6 +131,13 @@ export async function placeOrder(input: PlaceOrderInput) {
     body: `${buyerName} wants ${itemCount} item${itemCount !== 1 ? "s" : ""}`,
     url: `/seller`,
     orderId: order.id,
+  });
+
+  trackEvent(EVENTS.ORDER_PLACED, user.id, {
+    order_id: order.id,
+    restaurant_id: input.restaurantId,
+    total_cents: totalCents,
+    item_count: input.items.reduce((sum, i) => sum + i.quantity, 0),
   });
 
   return { success: true, orderId: order.id, clientSecret };

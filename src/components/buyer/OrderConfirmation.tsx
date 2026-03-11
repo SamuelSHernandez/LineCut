@@ -6,6 +6,7 @@ interface OrderConfirmationProps {
   items: OrderItem[];
   sellerName: string;
   sellerFee: number;
+  sellerMaxCap?: number; // cents
   onConfirm: () => void;
   disabled: boolean;
 }
@@ -15,12 +16,13 @@ export function calculatePlatformFee(itemsSubtotal: number): number {
   return Math.min(Math.max(fee, 1.0), 8.0);
 }
 
-const ORDER_MAX = 50;
+const ORDER_MAX = 200;
 
 export default function OrderConfirmation({
   items,
   sellerName,
   sellerFee,
+  sellerMaxCap,
   onConfirm,
   disabled,
 }: OrderConfirmationProps) {
@@ -30,7 +32,10 @@ export default function OrderConfirmation({
   );
   const platformFee = calculatePlatformFee(itemsSubtotal);
   const total = itemsSubtotal + sellerFee + platformFee;
-  const overCap = total > ORDER_MAX;
+  const totalCents = Math.round(total * 100);
+  const sellerCap = sellerMaxCap ?? ORDER_MAX * 100;
+  const overSellerCap = totalCents > sellerCap;
+  const overCap = total > ORDER_MAX || overSellerCap;
 
   return (
     <div>
@@ -90,9 +95,14 @@ export default function OrderConfirmation({
         </span>
       </div>
 
-      {/* $50 cap warning */}
-      {overCap && (
-        <p className="text-center font-[family-name:var(--font-body)] text-[13px] text-ketchup font-semibold mb-3">
+      {/* Cap warning */}
+      {overSellerCap && (
+        <p role="alert" className="text-center font-[family-name:var(--font-body)] text-[13px] text-ketchup font-semibold mb-3">
+          Exceeds {sellerName}&apos;s max of ${Math.round(sellerCap / 100)}. Remove some items to continue.
+        </p>
+      )}
+      {!overSellerCap && total > ORDER_MAX && (
+        <p role="alert" className="text-center font-[family-name:var(--font-body)] text-[13px] text-ketchup font-semibold mb-3">
           Orders are capped at ${ORDER_MAX}. Remove some items to continue.
         </p>
       )}
@@ -102,7 +112,7 @@ export default function OrderConfirmation({
         type="button"
         onClick={onConfirm}
         disabled={disabled || overCap}
-        className="w-full min-h-[48px] py-3 px-6 bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] transition-all duration-200 hover:bg-ketchup/90 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full min-h-[48px] py-3 px-6 bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] transition-all duration-200 hover:bg-ketchup/90 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-ketchup/50"
       >
         PLACE ORDER &mdash; ${total.toFixed(2)}
       </button>

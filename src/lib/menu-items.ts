@@ -1,6 +1,7 @@
+import { createClient } from "@/lib/supabase/server";
 import type { MenuItem } from "./types";
 
-export const menuItems: MenuItem[] = [
+const fallbackMenuItems: MenuItem[] = [
   // Katz's Delicatessen
   { id: "katzs-1", restaurantId: "katzs", name: "Pastrami on Rye", price: 24.95, popular: true },
   { id: "katzs-2", restaurantId: "katzs", name: "Corned Beef on Rye", price: 24.95, popular: true },
@@ -25,6 +26,31 @@ export const menuItems: MenuItem[] = [
   { id: "russ-6", restaurantId: "russ-daughters", name: "Babka Chocolate", price: 16.0, popular: false },
 ];
 
-export function getMenuItemsByRestaurant(restaurantId: string): MenuItem[] {
-  return menuItems.filter((m) => m.restaurantId === restaurantId);
+export async function getMenuItemsByRestaurant(restaurantId: string): Promise<MenuItem[]> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("menu_items")
+      .select("id, restaurant_id, name, price, popular")
+      .eq("restaurant_id", restaurantId)
+      .eq("available", true)
+      .order("sort_order", { ascending: true });
+
+    if (error || !data || data.length === 0) {
+      return fallbackMenuItems.filter((m) => m.restaurantId === restaurantId);
+    }
+
+    return data.map((m) => ({
+      id: m.id,
+      restaurantId: m.restaurant_id,
+      name: m.name,
+      price: m.price / 100, // cents to dollars
+      popular: m.popular,
+    }));
+  } catch {
+    return fallbackMenuItems.filter((m) => m.restaurantId === restaurantId);
+  }
 }
+
+// Keep the menuItems export for backward compat (used in client components)
+export const menuItems = fallbackMenuItems;

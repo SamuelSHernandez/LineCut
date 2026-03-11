@@ -22,12 +22,17 @@ export async function updateProfile(
   if (!user) redirect("/auth/login");
 
   const displayName = formData.get("displayName") as string;
+  const email = formData.get("email") as string | null;
   const phone = formData.get("phone") as string | null;
   const bio = formData.get("bio") as string | null;
   const neighborhood = formData.get("neighborhood") as string | null;
 
   if (!displayName?.trim()) {
     return { error: "Display name is required." };
+  }
+
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    return { error: "Please enter a valid email address." };
   }
 
   if (bio && bio.length > 160) {
@@ -38,6 +43,7 @@ export async function updateProfile(
     .from("profiles")
     .update({
       display_name: displayName.trim(),
+      email: email?.trim() || null,
       phone: phone?.trim() || null,
       bio: bio?.trim() || null,
       neighborhood: neighborhood?.trim() || null,
@@ -258,6 +264,34 @@ export async function createConnectLoginLink() {
   );
 
   return { url: loginLink.url };
+}
+
+export async function updateMaxOrderCap(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/auth/login");
+
+  const capDollars = Number(formData.get("maxOrderCap"));
+  if (isNaN(capDollars) || capDollars < 10 || capDollars > 200) {
+    return { error: "Max order cap must be between $10 and $200." };
+  }
+
+  const capCents = Math.round(capDollars * 100);
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ max_order_cap: capCents })
+    .eq("id", user.id);
+
+  if (error) {
+    return { error: "Failed to update. Please try again." };
+  }
+
+  revalidatePath("/profile", "layout");
+  return { error: null, success: true };
 }
 
 export async function uploadAvatar(formData: FormData) {
