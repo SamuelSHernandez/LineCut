@@ -7,7 +7,7 @@ import { useProfile } from "@/lib/profile-context";
 import { useOrders } from "@/lib/order-context";
 import { checkBillingReady } from "@/lib/billing-gate";
 import { placeOrder } from "@/app/(dashboard)/buyer/actions";
-import { calculatePlatformFee } from "./OrderConfirmation";
+import { calculatePlatformFeeDollars } from "@/lib/fee-tiers";
 import MenuItemPill from "./MenuItemPill";
 import OrderConfirmation from "./OrderConfirmation";
 import OrderTracker from "./OrderTracker";
@@ -55,7 +55,7 @@ export default function OrderDrawer({
     (sum, item) => sum + item.price * item.quantity,
     0
   );
-  const platformFee = calculatePlatformFee(itemsSubtotal);
+  const platformFee = calculatePlatformFeeDollars(itemsSubtotal);
   const total = itemsSubtotal + seller.fee + platformFee;
 
   // Focus trap and keyboard handling

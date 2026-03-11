@@ -1,14 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import webpush from "web-push";
-import { createClient } from "@supabase/supabase-js";
-
-// Service-role client to read push_subscriptions bypassing RLS
-function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
+import { getAdminClient } from "@/lib/supabase/admin";
 
 export interface SendPushBody {
   userId: string;

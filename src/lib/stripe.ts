@@ -23,7 +23,10 @@ export function getStripe(): Stripe {
   return _stripe;
 }
 
-// For backwards compatibility -- lazy getter
+/**
+ * Lazy Stripe instance. Proxies all property access through getStripe()
+ * so the secret key isn't read until first use.
+ */
 export const stripe = new Proxy({} as Stripe, {
   get(_target, prop) {
     return (getStripe() as unknown as Record<string | symbol, unknown>)[prop];

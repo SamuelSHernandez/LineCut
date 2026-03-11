@@ -1,16 +1,11 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { getAuthenticatedUser } from "@/lib/auth";
 
 // ── Block / Unblock ───────────────────────────────────────────
 
 export async function blockUser(blockedId: string, reason?: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/login");
+  const { supabase, user } = await getAuthenticatedUser();
 
   if (blockedId === user.id) {
     return { error: "You cannot block yourself." };
@@ -34,11 +29,7 @@ export async function blockUser(blockedId: string, reason?: string) {
 }
 
 export async function unblockUser(blockedId: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/login");
+  const { supabase, user } = await getAuthenticatedUser();
 
   const { error } = await supabase
     .from("blocked_users")
@@ -59,11 +50,7 @@ export async function unblockUser(blockedId: string) {
 export async function getBlockedUsers(): Promise<
   { blockedId: string; displayName: string; createdAt: string }[]
 > {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/login");
+  const { supabase, user } = await getAuthenticatedUser();
 
   const { data, error } = await supabase
     .from("blocked_users")
@@ -102,11 +89,7 @@ export async function reportUser(
   reason: ReportReason,
   details: string
 ) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/login");
+  const { supabase, user } = await getAuthenticatedUser();
 
   if (reportedId === user.id) {
     return { error: "You cannot report yourself." };

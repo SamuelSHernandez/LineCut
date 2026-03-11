@@ -53,7 +53,9 @@ export default function ChatPanel({ orderId, userId, otherPartyName }: ChatPanel
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ orderId, senderId: userId, body }),
-    }).catch(() => {});
+    }).catch((err) => {
+      console.error("[ChatPanel] Push notification failed:", err);
+    });
   }
 
   return (

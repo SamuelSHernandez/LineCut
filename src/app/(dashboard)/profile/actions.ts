@@ -1,9 +1,8 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe";
+import { getAuthenticatedUser } from "@/lib/auth";
 
 export type ProfileActionState = {
   error: string | null;
@@ -14,12 +13,7 @@ export async function updateProfile(
   _prevState: ProfileActionState,
   formData: FormData
 ): Promise<ProfileActionState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/auth/login");
+  const { supabase, user } = await getAuthenticatedUser();
 
   const displayName = formData.get("displayName") as string;
   const email = formData.get("email") as string | null;
@@ -31,7 +25,7 @@ export async function updateProfile(
     return { error: "Display name is required." };
   }
 
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) {
     return { error: "Please enter a valid email address." };
   }
 
@@ -78,12 +72,7 @@ export async function updateProfile(
 }
 
 export async function toggleRole(role: "buyer" | "seller", enable: boolean) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/auth/login");
+  const { supabase, user } = await getAuthenticatedUser();
 
   // Fetch current profile to enforce at-least-one-role
   const { data: profile } = await supabase
@@ -121,12 +110,7 @@ export async function toggleRole(role: "buyer" | "seller", enable: boolean) {
 }
 
 export async function createSetupIntent() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/auth/login");
+  const { supabase, user } = await getAuthenticatedUser();
 
   // Get or create Stripe customer
   const { data: profile } = await supabase
@@ -165,12 +149,7 @@ export async function createSetupIntent() {
 }
 
 export async function detachPaymentMethod() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/auth/login");
+  const { supabase, user } = await getAuthenticatedUser();
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -207,12 +186,7 @@ export async function detachPaymentMethod() {
 }
 
 export async function createConnectAccount() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/auth/login");
+  const { supabase, user } = await getAuthenticatedUser();
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -261,12 +235,7 @@ export async function createConnectAccount() {
 }
 
 export async function createConnectLoginLink() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/auth/login");
+  const { supabase, user } = await getAuthenticatedUser();
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -286,12 +255,7 @@ export async function createConnectLoginLink() {
 }
 
 export async function updateMaxOrderCap(formData: FormData) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/auth/login");
+  const { supabase, user } = await getAuthenticatedUser();
 
   const capDollars = Number(formData.get("maxOrderCap"));
   if (isNaN(capDollars) || capDollars < 10 || capDollars > 200) {
@@ -314,12 +278,7 @@ export async function updateMaxOrderCap(formData: FormData) {
 }
 
 export async function uploadAvatar(formData: FormData) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/auth/login");
+  const { supabase, user } = await getAuthenticatedUser();
 
   const file = formData.get("avatar") as File;
   if (!file || file.size === 0) {

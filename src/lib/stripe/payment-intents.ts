@@ -1,20 +1,7 @@
 import "server-only";
 import { getStripe } from "@/lib/stripe";
-import { createClient } from "@supabase/supabase-js";
-
-function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
-
-export function calculatePlatformFeeCents(itemsSubtotalCents: number): number {
-  const fee = Math.round(itemsSubtotalCents * 0.10);
-  const minCents = 50; // $0.50
-  const maxCents = 500; // $5
-  return Math.min(Math.max(fee, minCents), maxCents);
-}
+import { getAdminClient } from "@/lib/supabase/admin";
+import { calculatePlatformFeeCents } from "@/lib/fee-tiers";
 
 const ORDER_MAX_CENTS = 5000; // $50
 

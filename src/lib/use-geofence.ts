@@ -2,9 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { getDistanceMiles } from "@/lib/geo";
-
-// 1 mile = 1609.344 meters
-const MILES_TO_METERS = 1609.344;
+import { MILES_TO_METERS } from "@/lib/constants";
 
 export type GeofenceStatus =
   | "idle"

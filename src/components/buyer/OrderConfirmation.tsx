@@ -1,6 +1,7 @@
 "use client";
 
 import type { OrderItem } from "@/lib/types";
+import { calculatePlatformFeeDollars } from "@/lib/fee-tiers";
 
 interface OrderConfirmationProps {
   items: OrderItem[];
@@ -9,11 +10,6 @@ interface OrderConfirmationProps {
   sellerMaxCap?: number; // cents
   onConfirm: () => void;
   disabled: boolean;
-}
-
-export function calculatePlatformFee(itemsSubtotal: number): number {
-  const fee = itemsSubtotal * 0.10;
-  return Math.min(Math.max(fee, 0.50), 5.0);
 }
 
 const ORDER_MAX = 200;
@@ -30,7 +26,7 @@ export default function OrderConfirmation({
     (sum, item) => sum + item.price * item.quantity,
     0
   );
-  const platformFee = calculatePlatformFee(itemsSubtotal);
+  const platformFee = calculatePlatformFeeDollars(itemsSubtotal);
   const total = itemsSubtotal + sellerFee + platformFee;
   const totalCents = Math.round(total * 100);
   const sellerCap = sellerMaxCap ?? ORDER_MAX * 100;

@@ -1,7 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { getAuthenticatedUser } from "@/lib/auth";
 
 export async function submitBuyerReview(
   orderId: string,
@@ -9,12 +8,7 @@ export async function submitBuyerReview(
   comment?: string,
   tags?: string[]
 ) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/auth/login");
+  const { supabase, user } = await getAuthenticatedUser();
 
   if (stars < 1 || stars > 5) return { error: "Invalid rating." };
   if (comment && comment.length > 200) return { error: "Comment too long." };

@@ -1,13 +1,12 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 import { createOrderPaymentIntent } from "@/lib/stripe/payment-intents";
 import { sendPush } from "@/lib/push";
 import { trackEvent, EVENTS } from "@/lib/analytics";
 import { isBlocked } from "@/lib/blocked-users";
-
-const ORDER_MAX_CENTS = 20000; // $200 absolute max
+import { getAuthenticatedUser } from "@/lib/auth";
+import { calculatePlatformFeeDollars } from "@/lib/fee-tiers";
+import { ORDER_MAX_CENTS } from "@/lib/constants";
 
 interface PlaceOrderInput {
   sellerId: string;
@@ -17,18 +16,8 @@ interface PlaceOrderInput {
   sellerFee: number; // dollars
 }
 
-function calculatePlatformFee(itemsSubtotal: number): number {
-  const fee = itemsSubtotal * 0.10;
-  return Math.min(Math.max(fee, 0.50), 5.0);
-}
-
 export async function placeOrder(input: PlaceOrderInput) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/auth/login");
+  const { supabase, user } = await getAuthenticatedUser();
 
   // Check if either party has blocked the other
   const blocked = await isBlocked(user.id, input.sellerId);
@@ -41,7 +30,7 @@ export async function placeOrder(input: PlaceOrderInput) {
     (sum, item) => sum + item.price * item.quantity,
     0
   );
-  const platformFee = calculatePlatformFee(itemsSubtotal);
+  const platformFee = calculatePlatformFeeDollars(itemsSubtotal);
   const total = itemsSubtotal + input.sellerFee + platformFee;
 
   // Convert to cents for storage

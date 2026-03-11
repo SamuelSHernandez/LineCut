@@ -1,23 +1,12 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { confirmHandoff } from "@/lib/handoff";
+import { getAuthenticatedUser } from "@/lib/auth";
 
 interface ActionResult {
   success?: boolean;
   error?: string;
-}
-
-async function getAuthenticatedUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/auth/login");
-  return { supabase, user };
 }
 
 /**

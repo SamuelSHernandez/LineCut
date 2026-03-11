@@ -1,20 +1,11 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 import { getDistanceMiles } from "@/lib/geo";
 import { trackEvent, EVENTS } from "@/lib/analytics";
 import { getFeeCap, VALID_WAIT_MINUTES } from "@/lib/fee-tiers";
+import { getAuthenticatedUser } from "@/lib/auth";
+import { SERVER_GEOFENCE_RADIUS_METERS, MILES_TO_METERS } from "@/lib/constants";
 
-// 1 mile = 1609.344 meters
-const MILES_TO_METERS = 1609.344;
-
-/**
- * Server-side geofence radius in meters.
- * Slightly more generous than the client (150m) to account for
- * network round-trip time and GPS measurement jitter.
- */
-const SERVER_GEOFENCE_RADIUS_METERS = 200;
 
 interface GoLiveCoords {
   /**
@@ -35,12 +26,7 @@ interface GoLiveSessionData {
 }
 
 export async function goLive(restaurantId: string, coords?: GoLiveCoords, sessionData?: GoLiveSessionData) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/auth/login");
+  const { supabase, user } = await getAuthenticatedUser();
 
   // Check billing gate — seller must have active Stripe Connect
   const { data: profile } = await supabase
@@ -103,6 +89,9 @@ export async function goLive(restaurantId: string, coords?: GoLiveCoords, sessio
     if (!VALID_WAIT_MINUTES.includes(sessionData.estimatedWaitMinutes)) {
       return { error: "Invalid wait estimate." };
     }
+    if (!Number.isInteger(sessionData.sellerFeeCents)) {
+      return { error: "Invalid fee amount." };
+    }
     const maxFeeCents = getFeeCap(sessionData.estimatedWaitMinutes) * 100;
     if (sessionData.sellerFeeCents < 100 || sessionData.sellerFeeCents > maxFeeCents) {
       return { error: `Fee must be between $1 and $${maxFeeCents / 100} for this wait estimate.` };
@@ -138,12 +127,7 @@ export async function endSession(
   status: "completed" | "cancelled" = "completed",
   force: boolean = false
 ) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/auth/login");
+  const { supabase, user } = await getAuthenticatedUser();
 
   // Get the session to compute duration — allow ending from both 'active' and 'winding_down'
   const { data: session } = await supabase
@@ -216,12 +200,7 @@ export async function endSession(
  * active order finishes. Only transitions from 'winding_down' to 'completed'.
  */
 export async function completeWindingDownSession(sessionId: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/auth/login");
+  const { supabase, user } = await getAuthenticatedUser();
 
   // Verify the session is actually winding down
   const { data: session } = await supabase

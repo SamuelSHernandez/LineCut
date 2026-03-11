@@ -1,10 +1,12 @@
+import { EARTH_RADIUS_MILES } from "@/lib/constants";
+
 export function getDistanceMiles(
   lat1: number,
   lng1: number,
   lat2: number,
   lng2: number
 ): number {
-  const R = 3958.8; // Earth radius in miles
+  const R = EARTH_RADIUS_MILES;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLng = ((lng2 - lng1) * Math.PI) / 180;
   const a =

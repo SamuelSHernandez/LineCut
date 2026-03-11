@@ -2,16 +2,9 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getStripe } from "@/lib/stripe";
-import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { sendPush } from "@/lib/push";
-import { redirect } from "next/navigation";
-
-function getAdmin() {
-  return createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
+import { getAuthenticatedUser } from "@/lib/auth";
 
 const MIN_TIP_CENTS = 100; // $1
 const MAX_TIP_CENTS = 5000; // $50
@@ -20,13 +13,7 @@ export async function sendTip(
   orderId: string,
   amountCents: number
 ): Promise<{ success: true; tipId: string } | { error: string }> {
-  // Validate auth
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/auth/login");
+  const { user } = await getAuthenticatedUser();
 
   // Validate amount
   if (
@@ -37,7 +24,7 @@ export async function sendTip(
     return { error: "Tip must be between $1 and $50." };
   }
 
-  const admin = getAdmin();
+  const admin = getAdminClient();
 
   // Fetch order — verify it's completed and buyer owns it
   const { data: order, error: orderErr } = await admin
