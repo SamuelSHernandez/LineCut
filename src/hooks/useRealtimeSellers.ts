@@ -77,9 +77,9 @@ export function useRealtimeSellers({
   const onInsertRef = useRef(onInsert);
   const onUpdateRef = useRef(onUpdate);
   const onDeleteRef = useRef(onDelete);
-  onInsertRef.current = onInsert;
-  onUpdateRef.current = onUpdate;
-  onDeleteRef.current = onDelete;
+  useEffect(() => { onInsertRef.current = onInsert; }, [onInsert]);
+  useEffect(() => { onUpdateRef.current = onUpdate; }, [onUpdate]);
+  useEffect(() => { onDeleteRef.current = onDelete; }, [onDelete]);
 
   useEffect(() => {
     if (!restaurantId) return;

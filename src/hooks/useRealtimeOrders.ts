@@ -92,8 +92,8 @@ export function useRealtimeOrders({
   // every render when the parent re-renders.
   const onInsertRef = useRef(onInsert);
   const onUpdateRef = useRef(onUpdate);
-  onInsertRef.current = onInsert;
-  onUpdateRef.current = onUpdate;
+  useEffect(() => { onInsertRef.current = onInsert; }, [onInsert]);
+  useEffect(() => { onUpdateRef.current = onUpdate; }, [onUpdate]);
 
   useEffect(() => {
     if (!userId) return;

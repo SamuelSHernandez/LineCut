@@ -1,25 +1,24 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { usePushNotifications } from "@/lib/use-push-notifications";
 
 const DISMISSED_KEY = "linecut_notif_prompt_dismissed";
 
+function getInitialDismissed(): boolean {
+  if (typeof window === "undefined") return true; // hidden on server to avoid flash
+  return localStorage.getItem(DISMISSED_KEY) === "true";
+}
+
 export default function NotificationPrompt() {
   const { isSupported, permission, isSubscribed, subscribe } =
     usePushNotifications();
-  const [dismissed, setDismissed] = useState(true); // start hidden to avoid flash
+  const [dismissed, setDismissed] = useState(getInitialDismissed);
 
-  useEffect(() => {
-    // Read localStorage only on client
-    const wasDismissed = localStorage.getItem(DISMISSED_KEY) === "true";
-    setDismissed(wasDismissed);
-  }, []);
-
-  function dismiss() {
+  const dismiss = useCallback(() => {
     localStorage.setItem(DISMISSED_KEY, "true");
     setDismissed(true);
-  }
+  }, []);
 
   async function handleEnable() {
     await subscribe();

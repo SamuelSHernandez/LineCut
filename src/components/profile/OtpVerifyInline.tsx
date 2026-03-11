@@ -27,12 +27,8 @@ export default function OtpVerifyInline({
   const [sending, setSending] = useState(false);
   const [countdown, setCountdown] = useState(0);
 
-  // Reset state when verification status changes externally
-  useEffect(() => {
-    setOtpState(isVerified ? "verified" : "idle");
-    setCode("");
-    setError(null);
-  }, [isVerified]);
+  // Derive verified state directly from prop — no need to sync via effect
+  const effectiveOtpState = isVerified ? "verified" : otpState;
 
   // Countdown timer for resend
   useEffect(() => {
@@ -73,7 +69,7 @@ export default function OtpVerifyInline({
   if (!value?.trim()) return null;
 
   // Already verified
-  if (otpState === "verified") {
+  if (effectiveOtpState === "verified") {
     return (
       <p className="font-[family-name:var(--font-mono)] text-[11px] text-[#2D6A2D] mt-1 flex items-center gap-1">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -98,7 +94,7 @@ export default function OtpVerifyInline({
         </p>
       )}
 
-      {otpState === "idle" && (
+      {effectiveOtpState === "idle" && (
         <button
           type="button"
           onClick={handleSendCode}
@@ -109,7 +105,7 @@ export default function OtpVerifyInline({
         </button>
       )}
 
-      {(otpState === "code_sent" || otpState === "verifying") && (
+      {(effectiveOtpState === "code_sent" || effectiveOtpState === "verifying") && (
         <div className="flex items-center gap-2">
           <input
             type="text"
@@ -124,15 +120,15 @@ export default function OtpVerifyInline({
           <button
             type="button"
             onClick={handleVerify}
-            disabled={code.length !== 6 || otpState === "verifying"}
+            disabled={code.length !== 6 || effectiveOtpState === "verifying"}
             className="px-3 py-2 bg-chalkboard text-ticket font-[family-name:var(--font-body)] text-[12px] font-semibold rounded-[6px] hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {otpState === "verifying" ? "..." : "Confirm"}
+            {effectiveOtpState === "verifying" ? "..." : "Confirm"}
           </button>
         </div>
       )}
 
-      {otpState === "code_sent" && (
+      {effectiveOtpState === "code_sent" && (
         <p className="font-[family-name:var(--font-mono)] text-[11px] text-sidewalk">
           Code sent to {value}.{" "}
           {countdown > 0 ? (

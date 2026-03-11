@@ -40,6 +40,7 @@ function createProfile(overrides?: Partial<Profile>): Profile {
     phone: null,
     bio: null,
     neighborhood: null,
+    emailVerified: false,
     phoneVerified: true,
     stripeCustomerId: null,
     stripeConnectAccountId: null,

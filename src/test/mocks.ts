@@ -100,6 +100,7 @@ export function createMockProfile(overrides?: Partial<Profile>): Profile {
     phone: "+15551234567",
     bio: null,
     neighborhood: null,
+    emailVerified: false,
     phoneVerified: true,
     stripeCustomerId: null,
     stripeConnectAccountId: null,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { Order, OrderStatus } from "@/lib/types";
 import ReviewForm from "@/components/shared/ReviewForm";
 import DisputeForm from "@/components/shared/DisputeForm";
@@ -102,32 +102,6 @@ export default function SellerOrderCard({
       });
   }, [order.id, order.status]);
 
-  // ── Auto-cancel countdown for pending orders ──────────────
-  useEffect(() => {
-    if (order.status !== "pending") {
-      setAutoExpireSeconds(null);
-      return;
-    }
-
-    const createdMs = new Date(order.createdAt).getTime();
-    const expiresAt = createdMs + PENDING_TIMEOUT_MS;
-
-    function tick() {
-      const remaining = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
-      setAutoExpireSeconds(remaining);
-
-      if (remaining <= 0) {
-        handleAction("cancelled");
-      }
-    }
-
-    tick();
-    const interval = setInterval(tick, 1000);
-
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [order.status, order.createdAt, order.id]);
-
   // ── Ready-state timeout countdown ─────────────────────────
   useEffect(() => {
     if (order.status !== "ready" || !order.readyAt) {
@@ -199,6 +173,35 @@ export default function SellerOrderCard({
     },
     [isProcessing, onStatusChange, order.id]
   );
+
+  // Ref to avoid stale closure in timer effect
+  const handleActionRef = useRef(handleAction);
+  handleActionRef.current = handleAction;
+
+  // ── Auto-cancel countdown for pending orders ──────────────
+  useEffect(() => {
+    if (order.status !== "pending") {
+      setAutoExpireSeconds(null);
+      return;
+    }
+
+    const createdMs = new Date(order.createdAt).getTime();
+    const expiresAt = createdMs + PENDING_TIMEOUT_MS;
+
+    function tick() {
+      const remaining = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+      setAutoExpireSeconds(remaining);
+
+      if (remaining <= 0) {
+        handleActionRef.current("cancelled");
+      }
+    }
+
+    tick();
+    const interval = setInterval(tick, 1000);
+
+    return () => clearInterval(interval);
+  }, [order.status, order.createdAt, order.id]);
 
   const handleForceComplete = useCallback(async () => {
     if (isProcessing) return;

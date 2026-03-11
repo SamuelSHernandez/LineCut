@@ -32,21 +32,16 @@ export interface PushNotificationState {
 }
 
 export function usePushNotifications(): PushNotificationState {
-  const [permission, setPermission] = useState<
-    NotificationPermission | "loading"
-  >("loading");
-  const [isSubscribed, setIsSubscribed] = useState(false);
-
   const supported = isSupported();
 
-  // On mount: register SW, check existing subscription and permission
-  useEffect(() => {
-    if (!supported) {
-      setPermission("denied");
-      return;
-    }
+  const [permission, setPermission] = useState<
+    NotificationPermission | "loading"
+  >(() => (supported ? Notification.permission : "denied"));
+  const [isSubscribed, setIsSubscribed] = useState(false);
 
-    setPermission(Notification.permission);
+  // On mount: register SW and check existing subscription
+  useEffect(() => {
+    if (!supported) return;
 
     navigator.serviceWorker
       .register("/sw.js")

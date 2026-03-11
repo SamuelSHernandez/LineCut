@@ -42,19 +42,12 @@ function getPromptMode(): PromptMode {
 }
 
 export default function InstallPrompt() {
-  const [mode, setMode] = useState<PromptMode>(null);
+  const [mode, setMode] = useState<PromptMode>(getPromptMode);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(() => getPromptMode() !== null);
 
+  // Listen for Android/Chrome install prompt
   useEffect(() => {
-    const detected = getPromptMode();
-    if (detected) {
-      setMode(detected);
-      // Small delay for slide-up animation
-      requestAnimationFrame(() => setVisible(true));
-    }
-
-    // Listen for Android/Chrome install prompt
     function handleBeforeInstall(e: Event) {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
