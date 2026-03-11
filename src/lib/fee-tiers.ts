@@ -14,10 +14,42 @@ export const WAIT_TIERS: WaitTier[] = [
 /** Valid representative minutes values for server-side validation. */
 export const VALID_WAIT_MINUTES = WAIT_TIERS.map((t) => t.representativeMinutes);
 
+// ── Experience-based fee scaling ─────────────────────────────
+
+export interface ExperienceTier {
+  label: string;
+  minDeliveries: number;
+  feeCapMultiplier: number;
+}
+
+export const EXPERIENCE_TIERS: ExperienceTier[] = [
+  { label: "New", minDeliveries: 0, feeCapMultiplier: 0.5 },
+  { label: "Starter", minDeliveries: 1, feeCapMultiplier: 0.75 },
+  { label: "Experienced", minDeliveries: 3, feeCapMultiplier: 1.0 },
+];
+
+/** Returns the experience tier for a given number of completed deliveries. */
+export function getExperienceTier(completedDeliveries: number): ExperienceTier {
+  for (let i = EXPERIENCE_TIERS.length - 1; i >= 0; i--) {
+    if (completedDeliveries >= EXPERIENCE_TIERS[i].minDeliveries) {
+      return EXPERIENCE_TIERS[i];
+    }
+  }
+  return EXPERIENCE_TIERS[0];
+}
+
 /** Returns the max fee in dollars for a given estimated wait in minutes. */
 export function getFeeCap(estimatedMinutes: number): number {
   const tier = getTierForMinutes(estimatedMinutes);
   return tier.maxFeeDollars;
+}
+
+/** Returns the scaled fee cap based on wait tier and seller experience. */
+export function getScaledFeeCap(estimatedMinutes: number, completedDeliveries: number): number {
+  const baseCap = getFeeCap(estimatedMinutes);
+  const experience = getExperienceTier(completedDeliveries);
+  // Round to nearest cent
+  return Math.round(baseCap * experience.feeCapMultiplier * 100) / 100;
 }
 
 /** Returns the tier matching the given minutes value. Falls back to the last tier. */

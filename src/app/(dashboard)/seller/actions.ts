@@ -2,7 +2,7 @@
 
 import { getDistanceMiles } from "@/lib/geo";
 import { trackEvent, EVENTS } from "@/lib/analytics";
-import { getFeeCap, VALID_WAIT_MINUTES } from "@/lib/fee-tiers";
+import { getScaledFeeCap, VALID_WAIT_MINUTES } from "@/lib/fee-tiers";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { SERVER_GEOFENCE_RADIUS_METERS, MILES_TO_METERS } from "@/lib/constants";
 
@@ -31,13 +31,15 @@ export async function goLive(restaurantId: string, coords?: GoLiveCoords, sessio
   // Check billing gate — seller must have active Stripe Connect
   const { data: profile } = await supabase
     .from("profiles")
-    .select("stripe_connect_status")
+    .select("stripe_connect_status, completed_deliveries")
     .eq("id", user.id)
     .single();
 
   if (profile?.stripe_connect_status !== "active") {
     return { error: "billing_gate", redirectUrl: "/profile?gate=seller#payouts" };
   }
+
+  const completedDeliveries: number = profile?.completed_deliveries ?? 0;
 
   // Server-side proximity check.
   // Coordinates are used only to compute distance and are never stored or logged.
@@ -92,9 +94,10 @@ export async function goLive(restaurantId: string, coords?: GoLiveCoords, sessio
     if (!Number.isInteger(sessionData.sellerFeeCents)) {
       return { error: "Invalid fee amount." };
     }
-    const maxFeeCents = getFeeCap(sessionData.estimatedWaitMinutes) * 100;
+    const scaledCapDollars = getScaledFeeCap(sessionData.estimatedWaitMinutes, completedDeliveries);
+    const maxFeeCents = Math.round(scaledCapDollars * 100);
     if (sessionData.sellerFeeCents < 100 || sessionData.sellerFeeCents > maxFeeCents) {
-      return { error: `Fee must be between $1 and $${maxFeeCents / 100} for this wait estimate.` };
+      return { error: `Fee must be between $1 and $${scaledCapDollars.toFixed(2)} for this wait estimate.` };
     }
   }
 

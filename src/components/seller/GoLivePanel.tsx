@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Restaurant, SellerSession } from "@/lib/types";
 import { goLive, endSession } from "@/app/(dashboard)/seller/actions";
 import ConnectStripeButton from "./ConnectStripeButton";
-import { WAIT_TIERS, getTierForMinutes, type WaitTier } from "@/lib/fee-tiers";
+import { WAIT_TIERS, getTierForMinutes, getExperienceTier, getScaledFeeCap, type WaitTier } from "@/lib/fee-tiers";
 import {
   useGeofence,
   getCurrentPosition,
@@ -46,6 +46,7 @@ interface GoLivePanelProps {
   stripeConnectStatus?: "not_connected" | "pending" | "active" | "restricted";
   kycStatus?: "none" | "pending" | "approved" | "declined";
   suggestedWaitMinutes?: number | null;
+  completedDeliveries?: number;
 }
 
 export default function GoLivePanel({
@@ -54,7 +55,9 @@ export default function GoLivePanel({
   stripeConnectStatus = "not_connected",
   kycStatus = "none",
   suggestedWaitMinutes = null,
+  completedDeliveries = 0,
 }: GoLivePanelProps) {
+  const experienceTier = getExperienceTier(completedDeliveries);
   const [selectedRestaurant, setSelectedRestaurant] = useState(
     restaurants[0]?.id ?? ""
   );
@@ -70,9 +73,10 @@ export default function GoLivePanel({
 
   function handleSelectTier(tier: WaitTier) {
     setSelectedTier(tier);
+    const scaledCap = getScaledFeeCap(tier.representativeMinutes, completedDeliveries);
     const currentFee = parseFloat(fee);
-    if (!isNaN(currentFee) && currentFee > tier.maxFeeDollars) {
-      setFee(tier.maxFeeDollars.toFixed(2));
+    if (!isNaN(currentFee) && currentFee > scaledCap) {
+      setFee(scaledCap.toFixed(2));
     }
   }
 
@@ -372,7 +376,7 @@ export default function GoLivePanel({
                   <span className="block text-[14px] font-semibold">{tier.label}</span>
                   <span className="block text-[11px] mt-0.5">{tier.description}</span>
                   <span className="block text-[10px] mt-1 font-[family-name:var(--font-mono)] tracking-[1px]">
-                    up to ${tier.maxFeeDollars}
+                    up to ${getScaledFeeCap(tier.representativeMinutes, completedDeliveries).toFixed(2)}
                   </span>
                 </button>
               ))}
@@ -391,16 +395,25 @@ export default function GoLivePanel({
               id="seller-fee"
               type="number"
               min="1"
-              max={selectedTier?.maxFeeDollars ?? 10}
+              max={selectedTier ? getScaledFeeCap(selectedTier.representativeMinutes, completedDeliveries) : 10}
               step="0.50"
               value={fee}
               onChange={(e) => setFee(e.target.value)}
               className="w-full min-h-[48px] px-4 bg-butcher-paper rounded-[6px] border border-[#ddd4c4] font-[family-name:var(--font-body)] text-[14px] text-chalkboard focus:outline-none focus:border-mustard focus:ring-2 focus:ring-mustard/50 transition-colors"
             />
             {selectedTier && (
-              <p className="font-[family-name:var(--font-mono)] text-[11px] tracking-[1px] text-sidewalk mt-1">
-                Max ${selectedTier.maxFeeDollars} for this wait
-              </p>
+              <>
+                <p className="font-[family-name:var(--font-mono)] text-[11px] tracking-[1px] text-sidewalk mt-1">
+                  Max ${getScaledFeeCap(selectedTier.representativeMinutes, completedDeliveries).toFixed(2)} for this wait
+                </p>
+                {experienceTier.feeCapMultiplier < 1 && (
+                  <p className="font-[family-name:var(--font-body)] text-[11px] text-mustard mt-1">
+                    {completedDeliveries === 0
+                      ? "Complete your first delivery to unlock higher fees!"
+                      : `${3 - completedDeliveries} more ${3 - completedDeliveries === 1 ? "delivery" : "deliveries"} to unlock full earning potential!`}
+                  </p>
+                )}
+              </>
             )}
           </div>
 

@@ -16,7 +16,7 @@ export default async function SellerDashboard() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("display_name, is_buyer, is_seller, trust_score, stripe_connect_status, kyc_status")
+    .select("display_name, is_buyer, is_seller, trust_score, stripe_connect_status, kyc_status, completed_deliveries")
     .eq("id", user.id)
     .single();
 
@@ -92,6 +92,7 @@ export default async function SellerDashboard() {
         stripeConnectStatus={profile.stripe_connect_status ?? "not_connected"}
         kycStatus={profile.kyc_status ?? "none"}
         suggestedWaitMinutes={suggestedWaitMinutes}
+        completedDeliveries={profile.completed_deliveries ?? 0}
       />
 
       {/* Order Management */}
