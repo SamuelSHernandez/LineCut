@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getDistanceMiles } from "@/lib/geo";
+import { trackEvent, EVENTS } from "@/lib/analytics";
 
 // 1 mile = 1609.344 meters
 const MILES_TO_METERS = 1609.344;
@@ -75,16 +76,20 @@ export async function goLive(restaurantId: string, coords?: GoLiveCoords) {
     // session — the client-side check is the primary enforcement layer in that case.
   }
 
-  // Check for existing active session
+  // Check for existing active or winding-down session
   const { data: existing } = await supabase
     .from("seller_sessions")
-    .select("id")
+    .select("id, status")
     .eq("seller_id", user.id)
-    .eq("status", "active")
+    .in("status", ["active", "winding_down"])
     .maybeSingle();
 
   if (existing) {
-    return { error: "You already have an active session." };
+    return {
+      error: existing.status === "winding_down"
+        ? "You have a session winding down. Wait for active orders to finish or force end it."
+        : "You already have an active session.",
+    };
   }
 
   const { error } = await supabase.from("seller_sessions").insert({
@@ -96,12 +101,15 @@ export async function goLive(restaurantId: string, coords?: GoLiveCoords) {
     return { error: "Failed to start session. Please try again." };
   }
 
+  trackEvent(EVENTS.SELLER_WENT_LIVE, user.id, { restaurant_id: restaurantId });
+
   return { success: true };
 }
 
 export async function endSession(
   sessionId: string,
-  status: "completed" | "cancelled" = "completed"
+  status: "completed" | "cancelled" = "completed",
+  force: boolean = false
 ) {
   const supabase = await createClient();
   const {
@@ -110,17 +118,41 @@ export async function endSession(
 
   if (!user) redirect("/auth/login");
 
-  // Get the session to compute duration
+  // Get the session to compute duration — allow ending from both 'active' and 'winding_down'
   const { data: session } = await supabase
     .from("seller_sessions")
-    .select("started_at")
+    .select("started_at, status")
     .eq("id", sessionId)
     .eq("seller_id", user.id)
-    .eq("status", "active")
+    .in("status", ["active", "winding_down"])
     .single();
 
   if (!session) {
     return { error: "Session not found or already ended." };
+  }
+
+  // If ending gracefully (not forcing, not cancelling), check for active orders
+  if (status === "completed" && !force && session.status === "active") {
+    const { count } = await supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("session_id", sessionId)
+      .in("status", ["accepted", "in_progress", "ready"]);
+
+    if (count && count > 0) {
+      // Transition to winding_down instead of completed
+      const { error: windDownError } = await supabase
+        .from("seller_sessions")
+        .update({ status: "winding_down" })
+        .eq("id", sessionId)
+        .eq("seller_id", user.id);
+
+      if (windDownError) {
+        return { error: "Failed to wind down session. Please try again." };
+      }
+
+      return { success: true, windingDown: true };
+    }
   }
 
   const startedAt = new Date(session.started_at);
@@ -141,6 +173,71 @@ export async function endSession(
 
   if (error) {
     return { error: "Failed to end session. Please try again." };
+  }
+
+  trackEvent(EVENTS.SELLER_ENDED_SESSION, user.id, {
+    session_id: sessionId,
+    status,
+    duration_minutes: durationMinutes,
+  });
+
+  return { success: true };
+}
+
+/**
+ * Complete a winding-down session. Called automatically when the last
+ * active order finishes. Only transitions from 'winding_down' to 'completed'.
+ */
+export async function completeWindingDownSession(sessionId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/auth/login");
+
+  // Verify the session is actually winding down
+  const { data: session } = await supabase
+    .from("seller_sessions")
+    .select("started_at")
+    .eq("id", sessionId)
+    .eq("seller_id", user.id)
+    .eq("status", "winding_down")
+    .single();
+
+  if (!session) {
+    return { error: "Session not found or not winding down." };
+  }
+
+  // Double-check no active orders remain
+  const { count } = await supabase
+    .from("orders")
+    .select("id", { count: "exact", head: true })
+    .eq("session_id", sessionId)
+    .in("status", ["accepted", "in_progress", "ready"]);
+
+  if (count && count > 0) {
+    return { error: "Active orders still remain." };
+  }
+
+  const startedAt = new Date(session.started_at);
+  const now = new Date();
+  const durationMinutes = Math.round(
+    (now.getTime() - startedAt.getTime()) / 60000
+  );
+
+  const { error } = await supabase
+    .from("seller_sessions")
+    .update({
+      ended_at: now.toISOString(),
+      wait_duration_minutes: durationMinutes,
+      status: "completed",
+    })
+    .eq("id", sessionId)
+    .eq("seller_id", user.id);
+
+  if (error) {
+    return { error: "Failed to complete session." };
   }
 
   return { success: true };

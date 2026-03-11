@@ -14,6 +14,9 @@ export const sellers: Seller[] = [
     menuFlexibility: "full",
     status: "available",
     joinedAt: "2026-03-07T11:22:00Z",
+    avgRating: 4.7,
+    ratingCount: 38,
+    maxOrderCap: 5000,
   },
   {
     id: "seller-katzs-2",
@@ -28,6 +31,9 @@ export const sellers: Seller[] = [
     menuFlexibility: "popular-only",
     status: "available",
     joinedAt: "2026-03-07T11:35:00Z",
+    avgRating: 4.2,
+    ratingCount: 9,
+    maxOrderCap: 3000,
   },
   {
     id: "seller-joes-1",
@@ -42,6 +48,9 @@ export const sellers: Seller[] = [
     menuFlexibility: "full",
     status: "available",
     joinedAt: "2026-03-07T12:01:00Z",
+    avgRating: null,
+    ratingCount: 0,
+    maxOrderCap: 5000,
   },
   {
     id: "seller-russ-1",
@@ -56,6 +65,9 @@ export const sellers: Seller[] = [
     menuFlexibility: "full",
     status: "available",
     joinedAt: "2026-03-07T10:48:00Z",
+    avgRating: 4.9,
+    ratingCount: 55,
+    maxOrderCap: 10000,
   },
 ];
 

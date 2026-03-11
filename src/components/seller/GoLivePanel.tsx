@@ -43,12 +43,14 @@ interface GoLivePanelProps {
   restaurants: Restaurant[];
   activeSession: SellerSession | null;
   stripeConnectStatus?: "not_connected" | "pending" | "active" | "restricted";
+  kycStatus?: "none" | "pending" | "approved" | "declined";
 }
 
 export default function GoLivePanel({
   restaurants,
   activeSession: initialSession,
   stripeConnectStatus = "not_connected",
+  kycStatus = "none",
 }: GoLivePanelProps) {
   const [selectedRestaurant, setSelectedRestaurant] = useState(
     restaurants[0]?.id ?? ""
@@ -145,7 +147,7 @@ export default function GoLivePanel({
     });
   }
 
-  function handleEndSession(status: "completed" | "cancelled") {
+  function handleEndSession(status: "completed" | "cancelled", force: boolean = false) {
     if (!activeSession) return;
     setError(null);
 
@@ -154,9 +156,12 @@ export default function GoLivePanel({
     // notifies buyers that this seller has gone offline — no manual
     // BroadcastChannel publish is needed.
     startTransition(async () => {
-      const result = await endSession(activeSession.id, status);
+      const result = await endSession(activeSession.id, status, force);
       if (result.error) {
         setError(result.error);
+      } else if ("windingDown" in result && result.windingDown) {
+        // Session transitioned to winding_down — update local state
+        setActiveSession({ ...activeSession, status: "winding_down" });
       } else {
         setActiveSession(null);
       }
@@ -167,18 +172,32 @@ export default function GoLivePanel({
     ? restaurants.find((r) => r.id === activeSession.restaurantId)
     : null;
 
+  const isWindingDown = activeSession?.status === "winding_down";
+
   if (activeSession) {
     return (
       <section
-        aria-label="Live session"
-        className="bg-ticket rounded-[10px] p-6 border-2 border-[#2D6A2D] shadow-[0_4px_20px_rgba(0,0,0,0.06)]"
+        aria-label={isWindingDown ? "Winding down session" : "Live session"}
+        className={`bg-ticket rounded-[10px] p-6 border-2 shadow-[0_4px_20px_rgba(0,0,0,0.06)] ${
+          isWindingDown ? "border-mustard" : "border-[#2D6A2D]"
+        }`}
       >
         <div className="flex items-center gap-2 mb-2">
-          <span className="inline-block w-2 h-2 rounded-full bg-[#2D6A2D] animate-pulse" aria-hidden="true" />
+          <span
+            className={`inline-block w-2 h-2 rounded-full animate-pulse motion-reduce:animate-none ${
+              isWindingDown ? "bg-mustard" : "bg-[#2D6A2D]"
+            }`}
+            aria-hidden="true"
+          />
           <h2 className="font-[family-name:var(--font-display)] text-[22px] tracking-[1px] text-chalkboard">
-            YOU&apos;RE LIVE
+            {isWindingDown ? "WINDING DOWN" : "YOU\u0027RE LIVE"}
           </h2>
         </div>
+        {isWindingDown && (
+          <p className="font-[family-name:var(--font-body)] text-[13px] text-sidewalk mb-3">
+            Finishing current orders. No new orders will come in.
+          </p>
+        )}
         <p className="font-[family-name:var(--font-body)] text-[15px] text-chalkboard mb-1">
           {activeRestaurant?.name ?? "Unknown restaurant"}
         </p>
@@ -196,26 +215,38 @@ export default function GoLivePanel({
           </p>
         )}
 
-        <div className="flex gap-3">
+        {isWindingDown ? (
           <button
             type="button"
-            onClick={() => handleEndSession("completed")}
+            onClick={() => handleEndSession("completed", true)}
             disabled={isPending}
-            aria-label="End live session"
-            className="flex-1 min-h-[48px] bg-[#2D6A2D] text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] hover:bg-[#245a24] transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-[#2D6A2D]/30"
+            aria-label="Force end session immediately"
+            className="w-full min-h-[48px] bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] hover:bg-ketchup/90 transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-ketchup/50"
           >
-            {isPending ? "ENDING..." : "END SESSION"}
+            {isPending ? "ENDING..." : "FORCE END"}
           </button>
-          <button
-            type="button"
-            onClick={() => handleEndSession("cancelled")}
-            disabled={isPending}
-            aria-label="Cancel live session"
-            className="px-4 min-h-[48px] bg-butcher-paper text-sidewalk border border-[#ddd4c4] font-[family-name:var(--font-body)] text-[14px] rounded-[6px] hover:border-ketchup hover:text-ketchup transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-ketchup/20"
-          >
-            CANCEL
-          </button>
-        </div>
+        ) : (
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => handleEndSession("completed")}
+              disabled={isPending}
+              aria-label="End live session"
+              className="flex-1 min-h-[48px] bg-[#2D6A2D] text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] hover:bg-[#245a24] transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-[#2D6A2D]/30"
+            >
+              {isPending ? "ENDING..." : "END SESSION"}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleEndSession("cancelled")}
+              disabled={isPending}
+              aria-label="Cancel live session"
+              className="px-4 min-h-[48px] bg-butcher-paper text-sidewalk border border-[#ddd4c4] font-[family-name:var(--font-body)] text-[14px] rounded-[6px] hover:border-ketchup hover:text-ketchup transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-ketchup/50"
+            >
+              CANCEL
+            </button>
+          </div>
+        )}
       </section>
     );
   }
@@ -242,8 +273,27 @@ export default function GoLivePanel({
         </div>
       )}
 
-      {/* Restaurant selector — only show when Stripe is active */}
-      {stripeConnectStatus === "active" && (
+      {/* KYC verification gate */}
+      {stripeConnectStatus === "active" && kycStatus !== "approved" && (
+        <div className="mb-5">
+          <p className="font-[family-name:var(--font-body)] text-[13px] text-sidewalk mb-3">
+            {kycStatus === "pending"
+              ? "Your identity verification is in progress. You'll be able to go live once it's approved."
+              : kycStatus === "declined"
+                ? "Your identity verification was declined. Please try again from your profile."
+                : "Before you can go live, verify your identity. This is required for all sellers."}
+          </p>
+          <a
+            href="/profile"
+            className="inline-flex items-center min-h-[44px] px-6 bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[13px] font-semibold rounded-[6px] tracking-[1px] transition-colors hover:bg-ketchup/90"
+          >
+            {kycStatus === "pending" ? "CHECK STATUS" : kycStatus === "declined" ? "TRY AGAIN" : "VERIFY IDENTITY"}
+          </a>
+        </div>
+      )}
+
+      {/* Restaurant selector — only show when Stripe is active and KYC approved */}
+      {stripeConnectStatus === "active" && kycStatus === "approved" && (
         <>
           <fieldset className="mb-4 border-none p-0 m-0">
             <legend className="block font-[family-name:var(--font-mono)] text-[11px] tracking-[2px] uppercase text-sidewalk mb-2">
@@ -257,7 +307,7 @@ export default function GoLivePanel({
                   role="radio"
                   aria-checked={selectedRestaurant === r.id}
                   onClick={() => setSelectedRestaurant(r.id)}
-                  className={`w-full text-left px-4 min-h-[48px] rounded-[6px] font-[family-name:var(--font-body)] text-[14px] transition-colors focus:outline-none focus:ring-2 focus:ring-mustard/30 ${
+                  className={`w-full text-left px-4 min-h-[48px] rounded-[6px] font-[family-name:var(--font-body)] text-[14px] transition-colors focus:outline-none focus:ring-2 focus:ring-mustard/50 ${
                     selectedRestaurant === r.id
                       ? "bg-[#FFF3D6] border-2 border-mustard text-chalkboard"
                       : "bg-butcher-paper border border-[#ddd4c4] text-sidewalk hover:border-mustard"
@@ -287,7 +337,7 @@ export default function GoLivePanel({
               max="99"
               value={positionInLine}
               onChange={(e) => setPositionInLine(e.target.value)}
-              className="w-full min-h-[48px] px-4 bg-butcher-paper rounded-[6px] border border-[#ddd4c4] font-[family-name:var(--font-body)] text-[14px] text-chalkboard focus:outline-none focus:border-mustard focus:ring-2 focus:ring-mustard/20 transition-colors"
+              className="w-full min-h-[48px] px-4 bg-butcher-paper rounded-[6px] border border-[#ddd4c4] font-[family-name:var(--font-body)] text-[14px] text-chalkboard focus:outline-none focus:border-mustard focus:ring-2 focus:ring-mustard/50 transition-colors"
             />
           </div>
 
@@ -307,7 +357,7 @@ export default function GoLivePanel({
               step="0.50"
               value={fee}
               onChange={(e) => setFee(e.target.value)}
-              className="w-full min-h-[48px] px-4 bg-butcher-paper rounded-[6px] border border-[#ddd4c4] font-[family-name:var(--font-body)] text-[14px] text-chalkboard focus:outline-none focus:border-mustard focus:ring-2 focus:ring-mustard/20 transition-colors"
+              className="w-full min-h-[48px] px-4 bg-butcher-paper rounded-[6px] border border-[#ddd4c4] font-[family-name:var(--font-body)] text-[14px] text-chalkboard focus:outline-none focus:border-mustard focus:ring-2 focus:ring-mustard/50 transition-colors"
             />
           </div>
 
@@ -328,7 +378,7 @@ export default function GoLivePanel({
               className="mb-4 px-4 py-3 bg-butcher-paper border border-[#ddd4c4] rounded-[6px] flex items-center gap-2"
             >
               <span
-                className="inline-block w-2 h-2 rounded-full bg-mustard animate-pulse flex-shrink-0"
+                className="inline-block w-2 h-2 rounded-full bg-mustard animate-pulse motion-reduce:animate-none flex-shrink-0"
                 aria-hidden="true"
               />
               <p className="font-[family-name:var(--font-body)] text-[13px] text-sidewalk">
@@ -410,7 +460,7 @@ export default function GoLivePanel({
             onClick={handleGoLive}
             disabled={!canGoLive}
             aria-busy={geofence.status === "checking" || isPending}
-            className="w-full min-h-[48px] bg-mustard text-chalkboard font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] hover:bg-[#d4a843] transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-mustard/30"
+            className="w-full min-h-[48px] bg-mustard text-chalkboard font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] hover:bg-[#d4a843] transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-mustard/50"
           >
             {getButtonLabel()}
           </button>
@@ -422,7 +472,7 @@ export default function GoLivePanel({
             <button
               type="button"
               onClick={() => geofence.check()}
-              className="w-full mt-2 min-h-[44px] bg-transparent text-sidewalk font-[family-name:var(--font-body)] text-[13px] underline underline-offset-2 hover:text-chalkboard transition-colors focus:outline-none"
+              className="w-full mt-2 min-h-[44px] bg-transparent text-sidewalk font-[family-name:var(--font-body)] text-[13px] underline underline-offset-2 hover:text-chalkboard transition-colors focus:outline-none focus:ring-2 focus:ring-chalkboard/30 rounded-[6px]"
             >
               Try location check again
             </button>

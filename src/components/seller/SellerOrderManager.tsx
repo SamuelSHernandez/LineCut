@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { OrderStatus } from "@/lib/types";
 import type { SellerSession } from "@/lib/types";
 import { useOrders } from "@/lib/order-context";
+import { completeWindingDownSession } from "@/app/(dashboard)/seller/actions";
 import SellerOrderCard from "./SellerOrderCard";
 import SellerEarnings from "./SellerEarnings";
 import PastHandoffs from "./PastHandoffs";
@@ -11,11 +12,13 @@ import PastHandoffs from "./PastHandoffs";
 interface SellerOrderManagerProps {
   activeSession: SellerSession | null;
   restaurantId: string | null;
+  onSessionCompleted?: () => void;
 }
 
 export default function SellerOrderManager({
   activeSession,
   restaurantId,
+  onSessionCompleted,
 }: SellerOrderManagerProps) {
   const { orders, updateOrderStatus, cancelOrder } = useOrders();
 
@@ -42,6 +45,25 @@ export default function SellerOrderManager({
 
   const isLive = activeSession !== null;
 
+  // Auto-complete session when winding down and all active orders are done
+  const isWindingDown = activeSession?.status === "winding_down";
+  const activeOrderCount = activeOrders.length;
+  const completingRef = useRef(false);
+
+  useEffect(() => {
+    if (!isWindingDown || activeOrderCount > 0 || !activeSession || completingRef.current) return;
+
+    completingRef.current = true;
+    completeWindingDownSession(activeSession.id).then((result) => {
+      completingRef.current = false;
+      if (result.success) {
+        onSessionCompleted?.();
+        // Reload to get fresh server state
+        window.location.reload();
+      }
+    });
+  }, [isWindingDown, activeOrderCount, activeSession, onSessionCompleted]);
+
   return (
     <div className="space-y-8">
       {/* Earnings */}
@@ -63,6 +85,14 @@ export default function SellerOrderManager({
                   onStatusChange={handleStatusChange}
                 />
               ))}
+            </div>
+          ) : isWindingDown ? (
+            <div className="bg-ticket rounded-[10px] border border-mustard p-5 shadow-[0_4px_20px_rgba(0,0,0,0.06)]">
+              <div className="flex flex-col items-center justify-center py-8 gap-3">
+                <p className="font-[family-name:var(--font-body)] text-[13px] text-sidewalk text-center">
+                  All orders finished. Ending session...
+                </p>
+              </div>
             </div>
           ) : isLive ? (
             <div className="bg-ticket rounded-[10px] border border-[#eee6d8] p-5 shadow-[0_4px_20px_rgba(0,0,0,0.06)]">

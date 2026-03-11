@@ -14,7 +14,7 @@ interface SellerSessionRow {
   started_at: string;
   ended_at: string | null;
   wait_duration_minutes: number | null;
-  status: "active" | "completed" | "cancelled";
+  status: "active" | "winding_down" | "completed" | "cancelled";
   created_at: string;
 }
 

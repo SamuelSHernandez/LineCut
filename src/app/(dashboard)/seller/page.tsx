@@ -16,7 +16,7 @@ export default async function SellerDashboard() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("display_name, is_buyer, is_seller, trust_score, stripe_connect_status")
+    .select("display_name, is_buyer, is_seller, trust_score, stripe_connect_status, kyc_status")
     .eq("id", user.id)
     .single();
 
@@ -36,12 +36,12 @@ export default async function SellerDashboard() {
 
   const restaurantList = await fetchRestaurants();
 
-  // Fetch active session for this seller
+  // Fetch active or winding-down session for this seller
   const { data: activeSessionData } = await supabase
     .from("seller_sessions")
     .select("id, seller_id, restaurant_id, started_at, ended_at, wait_duration_minutes, status")
     .eq("seller_id", user.id)
-    .eq("status", "active")
+    .in("status", ["active", "winding_down"])
     .maybeSingle();
 
   const activeSession: SellerSession | null = activeSessionData
@@ -64,9 +64,11 @@ export default async function SellerDashboard() {
           HEY, {firstName}.
         </h1>
         <p className="font-[family-name:var(--font-body)] text-[15px] text-sidewalk">
-          {activeSession
-            ? "You're currently in line."
-            : "You're not in line right now."}
+          {activeSession?.status === "winding_down"
+            ? "Finishing up your current orders."
+            : activeSession
+              ? "You're currently in line."
+              : "You're not in line right now."}
         </p>
       </div>
 
@@ -75,6 +77,7 @@ export default async function SellerDashboard() {
         restaurants={restaurantList}
         activeSession={activeSession}
         stripeConnectStatus={profile.stripe_connect_status ?? "not_connected"}
+        kycStatus={profile.kyc_status ?? "none"}
       />
 
       {/* Order Management */}

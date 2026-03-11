@@ -44,13 +44,16 @@ interface SellerSessionRow {
   started_at: string;
   ended_at: string | null;
   wait_duration_minutes: number | null;
-  status: "active" | "completed" | "cancelled";
+  status: "active" | "winding_down" | "completed" | "cancelled";
   created_at: string;
   // Supabase returns joined rows as an array even for one-to-one relations
   // when using the select-string syntax.
   profiles: Array<{
     display_name: string;
     trust_score: number;
+    avg_rating: number | null;
+    rating_count: number;
+    max_order_cap: number;
   }> | null;
 }
 
@@ -59,7 +62,14 @@ interface SellerSessionRow {
 // at session start via the GoLivePanel but not yet persisted. We use
 // placeholder values so the buyer-side UI doesn't break.
 
-function sessionToSeller(session: SellerSession, displayName: string, trustScore: number): Seller {
+function sessionToSeller(
+  session: SellerSession,
+  displayName: string,
+  trustScore: number,
+  avgRating: number | null = null,
+  ratingCount: number = 0,
+  maxOrderCap: number = 5000,
+): Seller {
   const firstName = displayName.split(" ")[0] ?? displayName;
   const lastInitial = displayName.split(" ")[1]?.[0] ?? "";
 
@@ -79,6 +89,9 @@ function sessionToSeller(session: SellerSession, displayName: string, trustScore
     menuFlexibility: "full",
     status: "available",
     joinedAt: session.startedAt,
+    avgRating,
+    ratingCount,
+    maxOrderCap,
   };
 }
 
@@ -111,13 +124,35 @@ interface SellerPresenceProviderProps {
  * subscription is set up dynamically.
  */
 export function SellerPresenceProvider({ children }: SellerPresenceProviderProps) {
-  // Map from sellerId -> { session, displayName, trustScore }
+  // Map from sellerId -> { session, displayName, trustScore, avgRating, ratingCount, maxOrderCap }
   const [liveMap, setLiveMap] = useState<
-    Map<string, { session: SellerSession; displayName: string; trustScore: number }>
+    Map<string, { session: SellerSession; displayName: string; trustScore: number; avgRating: number | null; ratingCount: number; maxOrderCap: number }>
   >(new Map());
 
   // The currently watched restaurant (set by whichever detail page is mounted)
   const [watchedRestaurantId, setWatchedRestaurantId] = useState<string | null>(null);
+
+  // ── Blocked user IDs (bidirectional) ──────────────────────────────────────
+  const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const supabase = createClient();
+
+    async function fetchBlockedIds() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase.rpc("get_blocked_user_ids", {
+        p_user_id: user.id,
+      });
+
+      if (!error && data) {
+        setBlockedUserIds(new Set(data as string[]));
+      }
+    }
+
+    fetchBlockedIds();
+  }, []);
 
   // ── Initial fetch: load all active sessions ──────────────────────────────
   useEffect(() => {
@@ -127,7 +162,7 @@ export function SellerPresenceProvider({ children }: SellerPresenceProviderProps
       const { data, error } = await supabase
         .from("seller_sessions")
         .select(
-          "id, seller_id, restaurant_id, started_at, ended_at, wait_duration_minutes, status, created_at, profiles(display_name, trust_score)"
+          "id, seller_id, restaurant_id, started_at, ended_at, wait_duration_minutes, status, created_at, profiles(display_name, trust_score, avg_rating, rating_count, max_order_cap)"
         )
         .eq("status", "active");
 
@@ -138,14 +173,18 @@ export function SellerPresenceProvider({ children }: SellerPresenceProviderProps
 
       const nextMap = new Map<
         string,
-        { session: SellerSession; displayName: string; trustScore: number }
+        { session: SellerSession; displayName: string; trustScore: number; avgRating: number | null; ratingCount: number; maxOrderCap: number }
       >();
 
       for (const row of (data as unknown as SellerSessionRow[])) {
         const session = rowToSellerSession(row);
-        const displayName = row.profiles?.[0]?.display_name ?? "Seller";
-        const trustScore = row.profiles?.[0]?.trust_score ?? 0;
-        nextMap.set(session.sellerId, { session, displayName, trustScore });
+        const p = row.profiles?.[0];
+        const displayName = p?.display_name ?? "Seller";
+        const trustScore = p?.trust_score ?? 0;
+        const avgRating = p?.avg_rating ?? null;
+        const ratingCount = p?.rating_count ?? 0;
+        const maxOrderCap = p?.max_order_cap ?? 5000;
+        nextMap.set(session.sellerId, { session, displayName, trustScore, avgRating, ratingCount, maxOrderCap });
       }
 
       setTimeout(() => {
@@ -163,16 +202,19 @@ export function SellerPresenceProvider({ children }: SellerPresenceProviderProps
     const supabase = createClient();
     supabase
       .from("profiles")
-      .select("display_name, trust_score")
+      .select("display_name, trust_score, avg_rating, rating_count, max_order_cap")
       .eq("id", session.sellerId)
       .single()
       .then(({ data }) => {
         const displayName = data?.display_name ?? "Seller";
         const trustScore = data?.trust_score ?? 0;
+        const avgRating = data?.avg_rating ?? null;
+        const ratingCount = data?.rating_count ?? 0;
+        const maxOrderCap = data?.max_order_cap ?? 5000;
         setTimeout(() => {
           setLiveMap((prev) => {
             const next = new Map(prev);
-            next.set(session.sellerId, { session, displayName, trustScore });
+            next.set(session.sellerId, { session, displayName, trustScore, avgRating, ratingCount, maxOrderCap });
             return next;
           });
         }, 0);
@@ -181,7 +223,7 @@ export function SellerPresenceProvider({ children }: SellerPresenceProviderProps
 
   const handleSessionUpdate = useCallback((session: SellerSession) => {
     if (session.status !== "active") {
-      // Seller went offline
+      // Seller went offline or is winding down (no new orders)
       setTimeout(() => {
         setLiveMap((prev) => {
           const next = new Map(prev);
@@ -242,14 +284,16 @@ export function SellerPresenceProvider({ children }: SellerPresenceProviderProps
 
       const live = Array.from(liveMap.values())
         .filter((e) => e.session.restaurantId === restaurantId)
-        .map((e) => sessionToSeller(e.session, e.displayName, e.trustScore));
+        // Filter out blocked users (bidirectional)
+        .filter((e) => !blockedUserIds.has(e.session.sellerId))
+        .map((e) => sessionToSeller(e.session, e.displayName, e.trustScore, e.avgRating, e.ratingCount, e.maxOrderCap));
 
       if (live.length > 0) return live;
 
       // Fallback to hardcoded demo data when no live sellers
       return getSellersByRestaurant(restaurantId);
     },
-    [liveMap]
+    [liveMap, blockedUserIds]
   );
 
   const value = useMemo(
