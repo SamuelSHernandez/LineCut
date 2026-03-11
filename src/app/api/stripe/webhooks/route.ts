@@ -57,14 +57,16 @@ export async function POST(req: NextRequest) {
       if (pm.card) {
         const { error: updateError, count } = await supabase
           .from("profiles")
-          .update({
-            payment_method_last4: pm.card.last4,
-            payment_method_brand: pm.card.brand,
-            payment_method_exp_month: pm.card.exp_month,
-            payment_method_exp_year: pm.card.exp_year,
-          })
-          .eq("id", userId)
-          .select("id", { count: "exact", head: true });
+          .update(
+            {
+              payment_method_last4: pm.card.last4,
+              payment_method_brand: pm.card.brand,
+              payment_method_exp_month: pm.card.exp_month,
+              payment_method_exp_year: pm.card.exp_year,
+            },
+            { count: "exact" }
+          )
+          .eq("id", userId);
 
         console.log("[webhook] Profile update result — error:", updateError, "count:", count);
       }
