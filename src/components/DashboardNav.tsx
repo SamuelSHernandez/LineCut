@@ -10,7 +10,16 @@ export default function DashboardNav() {
   const profile = useProfile();
   const pathname = usePathname();
   const isBuyerView = pathname.startsWith("/buyer");
+  const isSellerView = pathname.startsWith("/seller");
   const isDualRole = profile.isBuyer && profile.isSeller;
+
+  function getHomeHref() {
+    if (isBuyerView) return "/buyer";
+    if (isSellerView) return "/seller";
+    // Neutral pages: fall back to profile roles
+    if (profile.isSeller && !profile.isBuyer) return "/seller";
+    return "/buyer";
+  }
 
   const initials = profile.displayName
     .split(" ")
@@ -22,7 +31,7 @@ export default function DashboardNav() {
   return (
     <nav aria-label="Main navigation" className="flex items-center justify-between px-6 md:px-12 py-4 border-b border-dashed border-[#ddd4c4]">
       {/* Left: Logo */}
-      <Link href={isBuyerView ? "/buyer" : "/seller"}>
+      <Link href={getHomeHref()}>
         <Logo size="sm" />
       </Link>
 
@@ -44,9 +53,9 @@ export default function DashboardNav() {
           <Link
             href="/seller"
             role="tab"
-            aria-selected={!isBuyerView}
-            className={`px-4 py-2 min-h-[44px] flex items-center font-[family-name:var(--font-body)] text-[13px] font-${!isBuyerView ? "semibold" : "normal"} transition-colors ${
-              !isBuyerView
+            aria-selected={isSellerView}
+            className={`px-4 py-2 min-h-[44px] flex items-center font-[family-name:var(--font-body)] text-[13px] font-${isSellerView ? "semibold" : "normal"} transition-colors ${
+              isSellerView
                 ? "text-chalkboard border-b-2 border-mustard"
                 : "text-sidewalk border-b-2 border-transparent hover:text-chalkboard"
             }`}
@@ -58,7 +67,7 @@ export default function DashboardNav() {
 
       {/* Right: Avatar + name + logout */}
       <div className="flex items-center gap-3">
-        {profile.isSeller && !isBuyerView && (
+        {profile.isSeller && isSellerView && (
           <Link
             href="/seller/earnings"
             className={`font-[family-name:var(--font-body)] text-[13px] transition-colors hidden sm:inline ${

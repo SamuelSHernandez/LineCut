@@ -48,9 +48,9 @@ export default function Logo({ size = "md", showTagline = false, variant = "defa
 
   return (
     <svg
-      width={totalW}
+      width={config.width}
       height={totalH}
-      viewBox={`0 0 ${totalW} ${totalH}`}
+      viewBox={`0 0 ${Math.max(totalW, config.width)} ${totalH}`}
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       role="img"
