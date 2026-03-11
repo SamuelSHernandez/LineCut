@@ -23,7 +23,7 @@ export interface SellerSession {
   startedAt: string;
   endedAt: string | null;
   waitDurationMinutes: number | null;
-  status: "active" | "completed" | "cancelled";
+  status: "active" | "winding_down" | "completed" | "cancelled";
 }
 
 export interface Seller {
@@ -39,6 +39,9 @@ export interface Seller {
   menuFlexibility: "full" | "popular-only" | "preset";
   status: "available" | "busy";
   joinedAt: string;
+  avgRating: number | null;
+  ratingCount: number;
+  maxOrderCap: number;
 }
 
 export interface MenuItem {
@@ -79,9 +82,59 @@ export interface Order {
   stripePaymentIntentId: string | null;
   createdAt: string;
   statusUpdatedAt: string;
+  readyAt?: string;
   restaurantName: string;
   sellerName: string;
   buyerName: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  orderId: string;
+  senderId: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface Review {
+  id: string;
+  orderId: string;
+  reviewerId: string;
+  revieweeId: string;
+  role: "buyer" | "seller";
+  stars: number;
+  comment: string | null;
+  tags: string[];
+  createdAt: string;
+}
+
+export type DisputeReason =
+  | "wrong_items"
+  | "missing_items"
+  | "food_quality"
+  | "no_show"
+  | "rude_behavior"
+  | "payment_issue"
+  | "other";
+
+export type DisputeStatus =
+  | "open"
+  | "under_review"
+  | "resolved_refund"
+  | "resolved_no_action"
+  | "resolved_warning";
+
+export interface Dispute {
+  id: string;
+  orderId: string;
+  reporterId: string;
+  reporterRole: "buyer" | "seller";
+  reason: DisputeReason;
+  description: string;
+  status: DisputeStatus;
+  resolutionNotes: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
 }
 
 export interface PayoutAccount {

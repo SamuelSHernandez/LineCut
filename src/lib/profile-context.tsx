@@ -9,6 +9,7 @@ export type Profile = {
   isSeller: boolean;
   avatarUrl: string | null;
   trustScore: number;
+  email: string | null;
   phone: string | null;
   bio: string | null;
   neighborhood: string | null;
@@ -16,10 +17,14 @@ export type Profile = {
   stripeCustomerId: string | null;
   stripeConnectAccountId: string | null;
   stripeConnectStatus: "not_connected" | "pending" | "active" | "restricted";
+  maxOrderCap: number;
+  avgRating: number | null;
+  ratingCount: number;
   paymentMethodLast4: string | null;
   paymentMethodBrand: string | null;
   paymentMethodExpMonth: number | null;
   paymentMethodExpYear: number | null;
+  kycStatus: "none" | "pending" | "approved" | "declined";
   createdAt: string;
 };
 
