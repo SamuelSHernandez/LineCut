@@ -5,6 +5,18 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { sendPush } from "@/lib/push";
 
+import type { DisputeReason } from "@/lib/types";
+
+const VALID_DISPUTE_REASONS: DisputeReason[] = [
+  "wrong_items",
+  "missing_items",
+  "food_quality",
+  "no_show",
+  "rude_behavior",
+  "payment_issue",
+  "other",
+];
+
 interface ActionResult {
   success?: boolean;
   error?: string;
@@ -32,6 +44,14 @@ export async function fileDispute(
     .single();
 
   if (!order) return { error: "Order not found." };
+
+  if (!VALID_DISPUTE_REASONS.includes(reason as DisputeReason)) {
+    return { error: "Invalid dispute reason." };
+  }
+
+  if (!description?.trim()) {
+    return { error: "Description is required." };
+  }
 
   if (!["completed", "cancelled"].includes(order.status)) {
     return { error: "Disputes can only be filed on completed or cancelled orders." };

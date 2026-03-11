@@ -17,7 +17,11 @@ async function requireAdmin() {
     .eq("id", user.id)
     .single();
 
-  if (!profile?.is_admin) redirect("/buyer");
+  if (!profile?.is_admin) {
+    redirect("/buyer");
+    // redirect() throws, but this satisfies TypeScript + makes intent explicit
+    throw new Error("Unauthorized");
+  }
 
   return supabase;
 }

@@ -2,13 +2,13 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import {
   capturePaymentIntent,
   cancelPaymentIntent,
 } from "@/lib/stripe/payment-intents";
 import { sendPush } from "@/lib/push";
 import { confirmHandoff } from "@/lib/handoff";
+import { getAuthenticatedUser } from "@/lib/auth";
 
 /** Look up buyer_id for an order (used to send push notifications). */
 async function getBuyerId(orderId: string): Promise<string | null> {
@@ -27,16 +27,6 @@ interface ActionResult {
   success?: boolean;
   error?: string;
   errorCode?: string;
-}
-
-async function getAuthenticatedUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/auth/login");
-  return { supabase, user };
 }
 
 /**
@@ -115,7 +105,7 @@ export async function acceptOrder(orderId: string): Promise<ActionResult> {
         orderId,
       });
     }
-  });
+  }).catch((err) => console.error("[acceptOrder] push failed:", err));
 
   revalidatePath("/seller");
   return { success: true };
@@ -165,7 +155,7 @@ export async function declineOrder(orderId: string): Promise<ActionResult> {
         orderId,
       });
     }
-  });
+  }).catch((err) => console.error("[declineOrder] push failed:", err));
 
   revalidatePath("/seller");
   return { success: true };
@@ -234,7 +224,7 @@ export async function markReady(orderId: string): Promise<ActionResult> {
         orderId,
       });
     }
-  });
+  }).catch((err) => console.error("[markReady] push failed:", err));
 
   revalidatePath("/seller");
   return { success: true };

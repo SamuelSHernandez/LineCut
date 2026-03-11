@@ -10,6 +10,15 @@ interface HandoffResult {
 /**
  * Confirm handoff for one party. If both parties have now confirmed,
  * transitions the order to completed.
+ *
+ * Race-condition safety: The insert + check-other-party + transition sequence
+ * is protected by the UNIQUE constraint on (order_id, role) which prevents
+ * duplicate confirmations, and the transition_order RPC which atomically
+ * verifies the order is still in "ready" status before transitioning. If two
+ * concurrent requests both insert and both attempt to transition, only one
+ * will succeed — the other gets an INVALID_TRANSITION error and we return
+ * { confirmed: true, completed: false } (the client will see the completion
+ * via realtime subscription).
  */
 export async function confirmHandoff(
   orderId: string,
@@ -66,7 +75,8 @@ export async function confirmHandoff(
     .maybeSingle();
 
   if (otherConfirmation) {
-    // Both confirmed — transition to completed
+    // Both confirmed — transition to completed.
+    // The RPC atomically checks status = "ready" so concurrent calls are safe.
     const { error: rpcErr } = await supabase.rpc("transition_order", {
       p_order_id: orderId,
       p_new_status: "completed",
@@ -75,6 +85,10 @@ export async function confirmHandoff(
     });
 
     if (rpcErr) {
+      // INVALID_TRANSITION means another request already completed the order
+      if (rpcErr.message?.includes("INVALID_TRANSITION")) {
+        return { confirmed: true, completed: false };
+      }
       return { confirmed: true, completed: false, error: rpcErr.message };
     }
 

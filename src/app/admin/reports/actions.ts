@@ -25,18 +25,25 @@ export async function updateReportStatus(
     return { error: "Unauthorized." };
   }
 
-  const { error } = await supabase
+  const { error, count } = await supabase
     .from("user_reports")
-    .update({
-      status: newStatus,
-      admin_notes: adminNotes.trim() || null,
-      reviewed_at: new Date().toISOString(),
-    })
+    .update(
+      {
+        status: newStatus,
+        admin_notes: adminNotes.trim() || null,
+        reviewed_at: new Date().toISOString(),
+      },
+      { count: "exact" }
+    )
     .eq("id", reportId);
 
   if (error) {
     console.error("Update report status error:", error);
     return { error: "Failed to update report." };
+  }
+
+  if (count === 0) {
+    return { error: "Report not found." };
   }
 
   return { success: true };

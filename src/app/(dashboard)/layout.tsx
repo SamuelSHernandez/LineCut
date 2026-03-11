@@ -17,11 +17,15 @@ export default async function DashboardLayout({
     redirect("/auth/login");
   }
 
-  const { data: row } = await supabase
+  const { data: row, error: profileError } = await supabase
     .from("profiles")
     .select("id, display_name, is_buyer, is_seller, avatar_url, trust_score, email, phone, bio, neighborhood, phone_verified, email_verified, stripe_customer_id, stripe_connect_account_id, stripe_connect_status, max_order_cap, avg_rating, rating_count, payment_method_last4, payment_method_brand, payment_method_exp_month, payment_method_exp_year, kyc_status, created_at")
     .eq("id", user.id)
     .single();
+
+  if (profileError) {
+    console.error("[DashboardLayout] Failed to fetch profile:", profileError.message);
+  }
 
   // If no profile row yet (edge case), fall back to auth metadata
   const profile: Profile = row
