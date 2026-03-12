@@ -245,9 +245,9 @@ export default function OrderTracker({ order, onCancel, onModify }: OrderTracker
       </div>
 
       {/* Vertical stepper */}
-      <div className="relative pl-8" role="list" aria-label="Order progress">
+      <div className="relative pl-10" role="list" aria-label="Order progress">
         <div
-          className="absolute left-[11px] top-3 bottom-3 w-[2px] bg-divider"
+          className="absolute left-[13px] top-3 bottom-3 w-[2px] bg-divider"
           aria-hidden="true"
         />
 
@@ -263,7 +263,7 @@ export default function OrderTracker({ order, onCancel, onModify }: OrderTracker
               className="relative pb-6 last:pb-0"
             >
               <div
-                className={`absolute left-[-20px] top-[2px] w-[22px] h-[22px] rounded-full border-2 flex items-center justify-center ${
+                className={`absolute left-[-28px] top-[2px] w-[22px] h-[22px] rounded-full border-2 flex items-center justify-center ${
                   isCompleted
                     ? "bg-sidewalk border-sidewalk"
                     : isCurrent

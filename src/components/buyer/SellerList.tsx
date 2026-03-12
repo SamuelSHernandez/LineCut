@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { Seller, MenuItem } from "@/lib/types";
 import SellerCard from "./SellerCard";
-import OrderDrawer from "./OrderDrawer";
+import OrderSheet from "./OrderSheet";
 
 interface SellerListProps {
   sellers: Seller[];
@@ -51,7 +51,7 @@ export default function SellerList({
       </div>
 
       {drawerOpen && selectedSeller && (
-        <OrderDrawer
+        <OrderSheet
           seller={selectedSeller}
           restaurantName={restaurantName}
           menuItems={menuItems}

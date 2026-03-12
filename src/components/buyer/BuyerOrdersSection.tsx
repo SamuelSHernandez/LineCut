@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useOrders } from "@/lib/order-context";
 import ActiveOrderCard from "./ActiveOrderCard";
-import OrderTrackerDrawer from "./OrderTrackerDrawer";
+import OrderTrackerSheet from "./OrderTrackerSheet";
 import type { Order } from "@/lib/types";
 
 export default function BuyerOrdersSection() {
@@ -57,7 +57,7 @@ export default function BuyerOrdersSection() {
       </div>
 
       {trackedOrder && (
-        <OrderTrackerDrawer
+        <OrderTrackerSheet
           order={trackedOrder}
           onClose={() => setTrackingOrder(null)}
           onCancel={handleCancel}

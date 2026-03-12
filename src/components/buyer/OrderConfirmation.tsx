@@ -11,6 +11,8 @@ interface OrderConfirmationProps {
   onConfirm: () => void;
   disabled: boolean;
   confirmLabel?: string;
+  /** When true, skip rendering the confirm button and caption — parent renders them in a sticky footer */
+  hideButton?: boolean;
 }
 
 const ORDER_MAX = 200;
@@ -23,6 +25,7 @@ export default function OrderConfirmation({
   onConfirm,
   disabled,
   confirmLabel,
+  hideButton,
 }: OrderConfirmationProps) {
   const itemsSubtotal = items.reduce(
     (sum, item) => sum + item.price * item.quantity,
@@ -106,19 +109,23 @@ export default function OrderConfirmation({
       )}
 
       {/* Confirm button */}
-      <button
-        type="button"
-        onClick={onConfirm}
-        disabled={disabled || overCap}
-        className="w-full min-h-[48px] py-3 px-6 bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] transition-all duration-200 hover:bg-ketchup/90 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-ketchup/50"
-      >
-        {confirmLabel ?? "PLACE ORDER"} &mdash; ${total.toFixed(2)}
-      </button>
+      {!hideButton && (
+        <>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={disabled || overCap}
+            className="w-full min-h-[48px] py-3 px-6 bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] transition-all duration-200 hover:bg-ketchup/90 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-ketchup/50"
+          >
+            {confirmLabel ?? "PLACE ORDER"} &mdash; ${total.toFixed(2)}
+          </button>
 
-      {/* Caption */}
-      <p className="text-center font-[family-name:var(--font-body)] text-[11px] text-sidewalk mt-2">
-        Your card will be authorized now and charged when your order is ready.
-      </p>
+          {/* Caption */}
+          <p className="text-center font-[family-name:var(--font-body)] text-[11px] text-sidewalk mt-2">
+            Your card will be authorized now and charged when your order is ready.
+          </p>
+        </>
+      )}
     </div>
   );
 }
