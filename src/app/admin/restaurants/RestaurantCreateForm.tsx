@@ -108,6 +108,28 @@ export default function RestaurantCreateForm() {
         />
       </div>
 
+      <div>
+        <label className="block font-[family-name:var(--font-mono)] text-[10px] tracking-[2px] text-sidewalk mb-1">
+          GOOGLE PLACE ID (optional)
+        </label>
+        <input
+          name="google_place_id"
+          placeholder="ChIJ..."
+          className="w-full min-h-[44px] py-2.5 px-4 rounded-[6px] border border-[#ddd4c4] bg-ticket font-[family-name:var(--font-body)] text-[14px] text-chalkboard placeholder:text-sidewalk/50"
+        />
+      </div>
+
+      <div>
+        <label className="block font-[family-name:var(--font-mono)] text-[10px] tracking-[2px] text-sidewalk mb-1">
+          IMAGE URL (optional)
+        </label>
+        <input
+          name="image_url"
+          placeholder="https://..."
+          className="w-full min-h-[44px] py-2.5 px-4 rounded-[6px] border border-[#ddd4c4] bg-ticket font-[family-name:var(--font-body)] text-[14px] text-chalkboard placeholder:text-sidewalk/50"
+        />
+      </div>
+
       <button
         type="submit"
         disabled={isPending}

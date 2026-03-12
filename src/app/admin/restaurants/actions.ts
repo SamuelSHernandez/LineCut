@@ -40,6 +40,8 @@ export async function createRestaurant(formData: FormData) {
     .filter(Boolean);
   const defaultWaitEstimate =
     (formData.get("default_wait_estimate") as string)?.trim() || "~15 min";
+  const googlePlaceId = (formData.get("google_place_id") as string)?.trim() || null;
+  const imageUrl = (formData.get("image_url") as string)?.trim() || null;
 
   if (!id || !name || !address || isNaN(lat) || isNaN(lng)) {
     return { error: "All fields are required." };
@@ -53,6 +55,8 @@ export async function createRestaurant(formData: FormData) {
     lng,
     cuisine,
     default_wait_estimate: defaultWaitEstimate,
+    google_place_id: googlePlaceId,
+    image_url: imageUrl,
   });
 
   if (error) {
@@ -77,6 +81,8 @@ export async function updateRestaurant(id: string, formData: FormData) {
     .filter(Boolean);
   const defaultWaitEstimate =
     (formData.get("default_wait_estimate") as string)?.trim() || "~15 min";
+  const googlePlaceId = (formData.get("google_place_id") as string)?.trim() || null;
+  const imageUrl = (formData.get("image_url") as string)?.trim() || null;
 
   if (!name || !address || isNaN(lat) || isNaN(lng)) {
     return { error: "All fields are required." };
@@ -91,6 +97,8 @@ export async function updateRestaurant(id: string, formData: FormData) {
       lng,
       cuisine,
       default_wait_estimate: defaultWaitEstimate,
+      google_place_id: googlePlaceId,
+      image_url: imageUrl,
     })
     .eq("id", id);
 

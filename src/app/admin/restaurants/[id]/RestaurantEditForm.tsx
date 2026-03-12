@@ -11,6 +11,8 @@ interface Restaurant {
   lng: number;
   cuisine: string[];
   default_wait_estimate: string;
+  google_place_id?: string | null;
+  image_url?: string | null;
 }
 
 export default function RestaurantEditForm({
@@ -127,6 +129,30 @@ export default function RestaurantEditForm({
             name="default_wait_estimate"
             defaultValue={restaurant.default_wait_estimate}
             className="w-full min-h-[44px] py-2.5 px-4 rounded-[6px] border border-[#ddd4c4] bg-ticket font-[family-name:var(--font-body)] text-[14px] text-chalkboard"
+          />
+        </div>
+
+        <div>
+          <label className="block font-[family-name:var(--font-mono)] text-[10px] tracking-[2px] text-sidewalk mb-1">
+            GOOGLE PLACE ID (optional)
+          </label>
+          <input
+            name="google_place_id"
+            defaultValue={restaurant.google_place_id ?? ""}
+            placeholder="ChIJ..."
+            className="w-full min-h-[44px] py-2.5 px-4 rounded-[6px] border border-[#ddd4c4] bg-ticket font-[family-name:var(--font-body)] text-[14px] text-chalkboard placeholder:text-sidewalk/50"
+          />
+        </div>
+
+        <div>
+          <label className="block font-[family-name:var(--font-mono)] text-[10px] tracking-[2px] text-sidewalk mb-1">
+            IMAGE URL (optional)
+          </label>
+          <input
+            name="image_url"
+            defaultValue={restaurant.image_url ?? ""}
+            placeholder="https://..."
+            className="w-full min-h-[44px] py-2.5 px-4 rounded-[6px] border border-[#ddd4c4] bg-ticket font-[family-name:var(--font-body)] text-[14px] text-chalkboard placeholder:text-sidewalk/50"
           />
         </div>
 

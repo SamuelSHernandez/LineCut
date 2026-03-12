@@ -91,6 +91,17 @@ export default function MenuItemCreateForm({
         </div>
       </div>
 
+      <div>
+        <label className="block font-[family-name:var(--font-mono)] text-[10px] tracking-[2px] text-sidewalk mb-1">
+          IMAGE URL (optional)
+        </label>
+        <input
+          name="image_url"
+          placeholder="https://..."
+          className="w-full min-h-[36px] py-1.5 px-3 rounded-[6px] border border-[#ddd4c4] bg-white font-[family-name:var(--font-body)] text-[13px] text-chalkboard placeholder:text-sidewalk/50"
+        />
+      </div>
+
       <div className="flex items-center gap-4">
         <label className="flex items-center gap-1.5 font-[family-name:var(--font-mono)] text-[10px] tracking-[1px] text-sidewalk">
           <input type="checkbox" name="popular" className="accent-ketchup" />

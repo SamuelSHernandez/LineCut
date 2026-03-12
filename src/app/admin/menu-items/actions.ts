@@ -37,6 +37,7 @@ export async function createMenuItem(formData: FormData) {
   const popular = formData.get("popular") === "on";
   const available = formData.get("available") !== "off";
   const sortOrder = parseInt(formData.get("sort_order") as string) || 0;
+  const imageUrl = (formData.get("image_url") as string)?.trim() || null;
 
   if (!id || !restaurantId || !name || isNaN(price)) {
     return { error: "All fields are required." };
@@ -50,6 +51,7 @@ export async function createMenuItem(formData: FormData) {
     popular,
     available,
     sort_order: sortOrder,
+    image_url: imageUrl,
   });
 
   if (error) {
@@ -69,6 +71,7 @@ export async function updateMenuItem(id: string, formData: FormData) {
   const popular = formData.get("popular") === "on";
   const available = formData.get("available") === "on";
   const sortOrder = parseInt(formData.get("sort_order") as string) || 0;
+  const imageUrl = (formData.get("image_url") as string)?.trim() || null;
 
   if (!name || isNaN(price)) {
     return { error: "Name and price are required." };
@@ -82,6 +85,7 @@ export async function updateMenuItem(id: string, formData: FormData) {
       popular,
       available,
       sort_order: sortOrder,
+      image_url: imageUrl,
     })
     .eq("id", id);
 
