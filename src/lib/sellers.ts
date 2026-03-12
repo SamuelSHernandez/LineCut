@@ -75,6 +75,25 @@ export const sellers: Seller[] = [
     kycVerified: true,
     pickupInstructions: "Look for me at the counter by the window",
   },
+  {
+    id: "seller-test-1",
+    restaurantId: "test",
+    firstName: "Test",
+    lastInitial: "S",
+    positionInLine: 2,
+    waitEstimate: "~20 min",
+    trustScore: 85,
+    completedOrders: 30,
+    fee: 5.0,
+    menuFlexibility: "full",
+    status: "available",
+    joinedAt: new Date().toISOString(),
+    avgRating: 4.5,
+    ratingCount: 20,
+    maxOrderCap: 5000,
+    kycVerified: true,
+    pickupInstructions: "Meet at the front entrance",
+  },
 ];
 
 export function getSellersByRestaurant(restaurantId: string): Seller[] {

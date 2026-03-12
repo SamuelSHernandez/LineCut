@@ -14,7 +14,7 @@ const launchLocations = [
 
 export default function Home() {
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="force-light min-h-screen flex flex-col">
       <Nav />
 
       {/* Hero */}

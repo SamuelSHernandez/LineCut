@@ -117,6 +117,21 @@ body {
   animation: statusPulse 2s ease-in-out infinite;
 }
 
+/* Force light-mode palette on the landing page regardless of theme */
+.force-light {
+  --color-ketchup: #C4382A;
+  --color-mustard: #E2A832;
+  --color-chalkboard: #1A1A18;
+  --color-butcher-paper: #F5EDE0;
+  --color-ticket: #FFFDF5;
+  --color-sidewalk: #6B6456;
+  --color-neon: #FF6B35;
+  --color-divider: #ddd4c4;
+  --color-card-border: #eee6d8;
+  color: #1A1A18;
+  background: #F5EDE0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-up,
   .animate-fade-in,
