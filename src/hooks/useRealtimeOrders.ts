@@ -23,6 +23,7 @@ interface OrderRow {
   created_at: string;
   updated_at: string;
   ready_at: string | null;
+  pickup_instructions?: string | null;
 }
 
 /**
@@ -50,6 +51,7 @@ export function rowToOrder(row: OrderRow): Order {
     restaurantName: "",
     sellerName: "",
     buyerName: "",
+    pickupInstructions: row.pickup_instructions ?? null,
   };
 }
 

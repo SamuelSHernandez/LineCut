@@ -18,6 +18,7 @@ interface SellerSessionRow {
   seller_fee_cents: number | null;
   status: "active" | "winding_down" | "completed" | "cancelled";
   created_at: string;
+  pickup_instructions?: string | null;
 }
 
 /**
@@ -34,6 +35,7 @@ export function rowToSellerSession(row: SellerSessionRow): SellerSession {
     estimatedWaitMinutes: row.estimated_wait_minutes ?? null,
     sellerFeeCents: row.seller_fee_cents ?? null,
     status: row.status,
+    pickupInstructions: row.pickup_instructions ?? null,
   };
 }
 
