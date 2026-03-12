@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import Logo from "@/components/Logo";
 import { useProfile } from "@/lib/profile-context";
 import { logout } from "@/app/auth/actions";
+import ThemeToggle from "@/components/shared/ThemeToggle";
+import Avatar from "@/components/shared/Avatar";
 
 export default function DashboardNav() {
   const profile = useProfile();
@@ -21,15 +23,8 @@ export default function DashboardNav() {
     return "/buyer";
   }
 
-  const initials = profile.displayName
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-
   return (
-    <nav aria-label="Main navigation" className="flex items-center justify-between px-6 md:px-12 py-4 border-b border-dashed border-[#ddd4c4]">
+    <nav aria-label="Main navigation" className="flex items-center justify-between px-6 md:px-12 py-4 border-b border-dashed border-divider">
       {/* Left: Logo */}
       <Link href={getHomeHref()}>
         <Logo size="sm" />
@@ -65,7 +60,7 @@ export default function DashboardNav() {
         </div>
       )}
 
-      {/* Right: Avatar + name + logout */}
+      {/* Right: Nav links + Avatar + Theme + Logout */}
       <div className="flex items-center gap-3">
         {profile.isSeller && isSellerView && (
           <Link
@@ -97,23 +92,12 @@ export default function DashboardNav() {
         >
           Safety
         </Link>
+        <ThemeToggle />
         <Link
           href="/profile"
           className="flex items-center gap-3 hover:opacity-80 transition-opacity"
         >
-          <div className="w-9 h-9 rounded-full bg-mustard flex items-center justify-center overflow-hidden">
-            {profile.avatarUrl ? (
-              <img
-                src={profile.avatarUrl}
-                alt={profile.displayName}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <span className="font-[family-name:var(--font-display)] text-[14px] text-chalkboard leading-none">
-                {initials}
-              </span>
-            )}
-          </div>
+          <Avatar src={profile.avatarUrl} fallback={profile.displayName} size="md" />
           <span className="font-[family-name:var(--font-body)] text-[13px] text-chalkboard hidden sm:inline">
             {profile.displayName}
           </span>
@@ -121,7 +105,7 @@ export default function DashboardNav() {
         <form action={logout}>
           <button
             type="submit"
-            className="min-h-[44px] font-[family-name:var(--font-body)] text-[13px] text-ketchup hover:opacity-70 transition-opacity cursor-pointer"
+            className="min-h-[44px] font-[family-name:var(--font-body)] text-[13px] text-ketchup hover:opacity-70 transition-opacity cursor-pointer hidden sm:inline"
           >
             Log out
           </button>
