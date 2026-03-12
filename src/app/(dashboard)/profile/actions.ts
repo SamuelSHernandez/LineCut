@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { stripe } from "@/lib/stripe";
 import { getAuthenticatedUser } from "@/lib/auth";
+import { getAdminClient } from "@/lib/supabase/admin";
 
 export type ProfileActionState = {
   error: string | null;
@@ -111,10 +112,11 @@ export async function toggleRole(role: "buyer" | "seller", enable: boolean) {
 }
 
 export async function createSetupIntent() {
-  const { supabase, user } = await getAuthenticatedUser();
+  const { user } = await getAuthenticatedUser();
+  const admin = getAdminClient();
 
   // Get or create Stripe customer
-  const { data: profile } = await supabase
+  const { data: profile } = await admin
     .from("profiles")
     .select("stripe_customer_id, display_name")
     .eq("id", user.id)
@@ -134,7 +136,7 @@ export async function createSetupIntent() {
     });
     customerId = customer.id;
 
-    await supabase
+    await admin
       .from("profiles")
       .update({ stripe_customer_id: customerId })
       .eq("id", user.id);
@@ -150,9 +152,10 @@ export async function createSetupIntent() {
 }
 
 export async function syncPaymentMethod() {
-  const { supabase, user } = await getAuthenticatedUser();
+  const { user } = await getAuthenticatedUser();
+  const admin = getAdminClient();
 
-  const { data: profile } = await supabase
+  const { data: profile } = await admin
     .from("profiles")
     .select("stripe_customer_id")
     .eq("id", user.id)
@@ -173,7 +176,7 @@ export async function syncPaymentMethod() {
     return { error: "No card found on Stripe customer." };
   }
 
-  await supabase
+  const { error: updateError } = await admin
     .from("profiles")
     .update({
       payment_method_last4: pm.card.last4,
@@ -182,6 +185,11 @@ export async function syncPaymentMethod() {
       payment_method_exp_year: pm.card.exp_year,
     })
     .eq("id", user.id);
+
+  if (updateError) {
+    console.error("[syncPaymentMethod] Profile update failed:", updateError);
+    return { error: "Failed to save card details." };
+  }
 
   revalidatePath("/profile", "layout");
   return { success: true };
