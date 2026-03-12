@@ -47,6 +47,7 @@ interface GoLivePanelProps {
   kycStatus?: "none" | "pending" | "approved" | "declined";
   suggestedWaitMinutes?: number | null;
   completedDeliveries?: number;
+  openStatus?: Record<string, boolean | null>;
 }
 
 export default function GoLivePanel({
@@ -56,6 +57,7 @@ export default function GoLivePanel({
   kycStatus = "none",
   suggestedWaitMinutes = null,
   completedDeliveries = 0,
+  openStatus,
 }: GoLivePanelProps) {
   const experienceTier = getExperienceTier(completedDeliveries);
   const [selectedRestaurant, setSelectedRestaurant] = useState(
@@ -69,6 +71,7 @@ export default function GoLivePanel({
     suggestedWaitMinutes ? getTierForMinutes(suggestedWaitMinutes) : null
   );
   const [fee, setFee] = useState("5.00");
+  const [pickupInstructions, setPickupInstructions] = useState("");
   const router = useRouter();
 
   function handleSelectTier(tier: WaitTier) {
@@ -93,17 +96,22 @@ export default function GoLivePanel({
 
   const onDesktop = isLikelyDesktop();
 
+  // Check if the selected restaurant is closed
+  const selectedRestaurantClosed = openStatus?.[selectedRestaurant] === false;
+
   // Button is disabled while:
   // - a server transition is in flight
   // - no restaurant is selected
   // - geolocation is actively checking
   // - the seller is confirmed outside the geofence
+  // - the selected restaurant is closed
   const canGoLive =
     !isPending &&
     !!selectedRestaurant &&
     !!selectedTier &&
     geofence.status !== "checking" &&
-    geofence.status !== "outside";
+    geofence.status !== "outside" &&
+    !selectedRestaurantClosed;
 
   // Derive button label from current state
   function getButtonLabel(): string {
@@ -156,6 +164,7 @@ export default function GoLivePanel({
       const result = await goLive(selectedRestaurant, coords, {
         estimatedWaitMinutes: selectedTier!.representativeMinutes,
         sellerFeeCents: feeCents,
+        pickupInstructions: pickupInstructions.trim() || undefined,
       });
 
       if (result.error === "billing_gate" && "redirectUrl" in result) {
@@ -231,7 +240,7 @@ export default function GoLivePanel({
           {elapsed}
         </p>
         {(activeSession.estimatedWaitMinutes || activeSession.sellerFeeCents) && (
-          <div className="flex gap-4 mb-5 font-[family-name:var(--font-body)] text-[13px] text-sidewalk">
+          <div className="flex gap-4 mb-3 font-[family-name:var(--font-body)] text-[13px] text-sidewalk">
             {activeSession.estimatedWaitMinutes && (
               <span>Est. wait: ~{activeSession.estimatedWaitMinutes} min</span>
             )}
@@ -239,6 +248,11 @@ export default function GoLivePanel({
               <span>Your fee: ${(activeSession.sellerFeeCents / 100).toFixed(2)}</span>
             )}
           </div>
+        )}
+        {activeSession.pickupInstructions && (
+          <p className="font-[family-name:var(--font-body)] text-[12px] text-sidewalk mb-5">
+            Pickup: {activeSession.pickupInstructions}
+          </p>
         )}
 
         {error && (
@@ -415,6 +429,40 @@ export default function GoLivePanel({
                 )}
               </>
             )}
+          </div>
+
+          {/* Restaurant closed warning */}
+          {selectedRestaurantClosed && (
+            <div className="mb-4 px-4 py-3 bg-[#FBE9E7] border border-[#f0b0aa] rounded-[6px]">
+              <p className="font-[family-name:var(--font-body)] text-[13px] text-ketchup font-semibold">
+                {selectedRestaurantObj?.name ?? "This restaurant"} appears to be closed right now.
+              </p>
+              <p className="font-[family-name:var(--font-body)] text-[13px] text-sidewalk mt-1">
+                You can&apos;t go live at a closed restaurant.
+              </p>
+            </div>
+          )}
+
+          {/* Pickup location */}
+          <div className="mb-4">
+            <label
+              htmlFor="pickup-instructions"
+              className="block font-[family-name:var(--font-mono)] text-[11px] tracking-[2px] uppercase text-sidewalk mb-2"
+            >
+              PICKUP LOCATION
+            </label>
+            <textarea
+              id="pickup-instructions"
+              maxLength={200}
+              rows={2}
+              value={pickupInstructions}
+              onChange={(e) => setPickupInstructions(e.target.value)}
+              placeholder="e.g. Meet outside front door"
+              className="w-full px-4 py-3 bg-butcher-paper rounded-[6px] border border-[#ddd4c4] font-[family-name:var(--font-body)] text-[14px] text-chalkboard placeholder:text-sidewalk/50 focus:outline-none focus:border-mustard focus:ring-2 focus:ring-mustard/50 transition-colors resize-none"
+            />
+            <p className="font-[family-name:var(--font-mono)] text-[11px] tracking-[1px] text-sidewalk mt-1">
+              {pickupInstructions.length}/200 — Tell buyers where to find you
+            </p>
           </div>
 
           {/* Desktop degraded experience notice — shown before first check */}

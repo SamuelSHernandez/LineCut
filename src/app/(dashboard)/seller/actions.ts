@@ -23,6 +23,7 @@ interface GoLiveCoords {
 interface GoLiveSessionData {
   estimatedWaitMinutes: number;
   sellerFeeCents: number;
+  pickupInstructions?: string;
 }
 
 export async function goLive(restaurantId: string, coords?: GoLiveCoords, sessionData?: GoLiveSessionData) {
@@ -99,6 +100,9 @@ export async function goLive(restaurantId: string, coords?: GoLiveCoords, sessio
     if (sessionData.sellerFeeCents < 100 || sessionData.sellerFeeCents > maxFeeCents) {
       return { error: `Fee must be between $1 and $${scaledCapDollars.toFixed(2)} for this wait estimate.` };
     }
+    if (sessionData.pickupInstructions && sessionData.pickupInstructions.length > 200) {
+      return { error: "Pickup instructions must be 200 characters or less." };
+    }
   }
 
   const { error } = await supabase.from("seller_sessions").insert({
@@ -107,6 +111,9 @@ export async function goLive(restaurantId: string, coords?: GoLiveCoords, sessio
     ...(sessionData && {
       estimated_wait_minutes: sessionData.estimatedWaitMinutes,
       seller_fee_cents: sessionData.sellerFeeCents,
+      ...(sessionData.pickupInstructions && {
+        pickup_instructions: sessionData.pickupInstructions,
+      }),
     }),
   });
 

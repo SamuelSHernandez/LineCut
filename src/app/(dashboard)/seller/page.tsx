@@ -3,7 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import GoLivePanel from "@/components/seller/GoLivePanel";
 import SellerOrderManager from "@/components/seller/SellerOrderManager";
+import DailyGoalCard from "@/components/seller/DailyGoalCard";
+import PullToRefreshWrapper from "@/components/shared/PullToRefreshWrapper";
 import { fetchRestaurants } from "@/lib/restaurants";
+import { getOpenStatusMap } from "@/lib/google-places";
 import type { SellerSession } from "@/lib/types";
 
 export default async function SellerDashboard() {
@@ -16,7 +19,7 @@ export default async function SellerDashboard() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("display_name, is_buyer, is_seller, trust_score, stripe_connect_status, kyc_status, completed_deliveries")
+    .select("display_name, is_buyer, is_seller, trust_score, stripe_connect_status, kyc_status, completed_deliveries, daily_order_goal, current_streak, longest_streak, last_active_date")
     .eq("id", user.id)
     .single();
 
@@ -35,6 +38,7 @@ export default async function SellerDashboard() {
   const firstName = profile.display_name.split(" ")[0].toUpperCase();
 
   const restaurantList = await fetchRestaurants();
+  const openStatus = await getOpenStatusMap(restaurantList);
 
   // Fetch historical wait stats for auto-suggest
   let suggestedWaitMinutes: number | null = null;
@@ -50,10 +54,20 @@ export default async function SellerDashboard() {
   // Fetch active or winding-down session for this seller
   const { data: activeSessionData } = await supabase
     .from("seller_sessions")
-    .select("id, seller_id, restaurant_id, started_at, ended_at, wait_duration_minutes, estimated_wait_minutes, seller_fee_cents, status")
+    .select("id, seller_id, restaurant_id, started_at, ended_at, wait_duration_minutes, estimated_wait_minutes, seller_fee_cents, status, pickup_instructions")
     .eq("seller_id", user.id)
     .in("status", ["active", "winding_down"])
     .maybeSingle();
+
+  // Count today's completed orders for gamification
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const { count: todayOrderCount } = await supabase
+    .from("orders")
+    .select("id", { count: "exact", head: true })
+    .eq("seller_id", user.id)
+    .eq("status", "completed")
+    .gte("updated_at", todayStart.toISOString());
 
   const activeSession: SellerSession | null = activeSessionData
     ? {
@@ -66,10 +80,12 @@ export default async function SellerDashboard() {
         estimatedWaitMinutes: activeSessionData.estimated_wait_minutes ?? null,
         sellerFeeCents: activeSessionData.seller_fee_cents ?? null,
         status: activeSessionData.status,
+        pickupInstructions: activeSessionData.pickup_instructions ?? null,
       }
     : null;
 
   return (
+    <PullToRefreshWrapper>
     <main className="space-y-8">
       {/* Welcome */}
       <div>
@@ -85,6 +101,15 @@ export default async function SellerDashboard() {
         </p>
       </div>
 
+      {/* Daily Goal */}
+      <DailyGoalCard
+        todayCount={todayOrderCount ?? 0}
+        dailyGoal={profile.daily_order_goal ?? 10}
+        currentStreak={profile.current_streak ?? 0}
+        longestStreak={profile.longest_streak ?? 0}
+        completedDeliveries={profile.completed_deliveries ?? 0}
+      />
+
       {/* Go Live */}
       <GoLivePanel
         restaurants={restaurantList}
@@ -93,6 +118,7 @@ export default async function SellerDashboard() {
         kycStatus={profile.kyc_status ?? "none"}
         suggestedWaitMinutes={suggestedWaitMinutes}
         completedDeliveries={profile.completed_deliveries ?? 0}
+        openStatus={openStatus}
       />
 
       {/* Order Management */}
@@ -111,5 +137,6 @@ export default async function SellerDashboard() {
         </Link>
       </div>
     </main>
+    </PullToRefreshWrapper>
   );
 }

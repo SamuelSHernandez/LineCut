@@ -6,9 +6,10 @@ import {
   capturePaymentIntent,
   cancelPaymentIntent,
 } from "@/lib/stripe/payment-intents";
-import { sendPush } from "@/lib/push";
+import { sendNotification } from "@/lib/notify";
 import { confirmHandoff } from "@/lib/handoff";
 import { getAuthenticatedUser } from "@/lib/auth";
+import { calculateStreak } from "@/lib/gamification";
 
 /** Look up buyer_id for an order (used to send push notifications). */
 async function getBuyerId(orderId: string): Promise<string | null> {
@@ -97,15 +98,16 @@ export async function acceptOrder(orderId: string): Promise<ActionResult> {
   // Notify buyer — fire and forget
   getBuyerId(orderId).then((buyerId) => {
     if (buyerId) {
-      sendPush({
+      sendNotification({
         userId: buyerId,
         title: "Order accepted",
         body: "Your order was accepted. Hang tight.",
         url: `/buyer`,
         orderId,
+        smsBody: "LineCut: Your order was accepted! Hang tight.",
       });
     }
-  }).catch((err) => console.error("[acceptOrder] push failed:", err));
+  }).catch((err) => console.error("[acceptOrder] notify failed:", err));
 
   revalidatePath("/seller");
   return { success: true };
@@ -147,15 +149,16 @@ export async function declineOrder(orderId: string): Promise<ActionResult> {
   // Notify buyer — fire and forget
   getBuyerId(orderId).then((buyerId) => {
     if (buyerId) {
-      sendPush({
+      sendNotification({
         userId: buyerId,
         title: "Order declined",
         body: "Your order was declined. You won't be charged.",
         url: `/buyer`,
         orderId,
+        smsBody: "LineCut: Your order was declined. You won't be charged.",
       });
     }
-  }).catch((err) => console.error("[declineOrder] push failed:", err));
+  }).catch((err) => console.error("[declineOrder] notify failed:", err));
 
   revalidatePath("/seller");
   return { success: true };
@@ -186,10 +189,10 @@ export async function markInProgress(orderId: string): Promise<ActionResult> {
 export async function markReady(orderId: string): Promise<ActionResult> {
   const { supabase, user } = await getAuthenticatedUser();
 
-  // Fetch PI id before transitioning
+  // Fetch PI id and pickup instructions before transitioning
   const { data: order } = await supabase
     .from("orders")
-    .select("stripe_payment_intent_id")
+    .select("stripe_payment_intent_id, pickup_instructions, restaurant_id")
     .eq("id", orderId)
     .single();
 
@@ -213,18 +216,32 @@ export async function markReady(orderId: string): Promise<ActionResult> {
     return { error: result.error, errorCode: result.errorCode };
   }
 
-  // Notify buyer — fire and forget
-  getBuyerId(orderId).then((buyerId) => {
+  // Notify buyer — fire and forget (include pickup instructions if available)
+  const pickupNote = order?.pickup_instructions
+    ? ` ${order.pickup_instructions}`
+    : "";
+  getBuyerId(orderId).then(async (buyerId) => {
     if (buyerId) {
-      sendPush({
+      // Look up restaurant name for SMS
+      let restaurantName = "the restaurant";
+      if (order?.restaurant_id) {
+        const { data: restaurant } = await supabase
+          .from("restaurants")
+          .select("name")
+          .eq("id", order.restaurant_id)
+          .maybeSingle();
+        if (restaurant?.name) restaurantName = restaurant.name;
+      }
+      sendNotification({
         userId: buyerId,
         title: "Order ready",
-        body: "Your order is ready for pickup.",
+        body: `Your order is ready for pickup.${pickupNote}`,
         url: `/buyer`,
         orderId,
+        smsBody: `LineCut: Your ${restaurantName} order is ready!${pickupNote}`,
       });
     }
-  }).catch((err) => console.error("[markReady] push failed:", err));
+  }).catch((err) => console.error("[markReady] notify failed:", err));
 
   revalidatePath("/seller");
   return { success: true };
@@ -235,13 +252,42 @@ export async function markReady(orderId: string): Promise<ActionResult> {
  * Transition: ready -> completed (when both parties confirm)
  */
 export async function markCompleted(orderId: string): Promise<ActionResult> {
-  const { user } = await getAuthenticatedUser();
+  const { supabase, user } = await getAuthenticatedUser();
 
   const result = await confirmHandoff(orderId, user.id, "seller");
 
   if (result.error) {
     return { error: result.error };
   }
+
+  // Update streak (fire and forget)
+  (async () => {
+    try {
+      const { data: sellerProfile } = await supabase
+        .from("profiles")
+        .select("current_streak, longest_streak, last_active_date")
+        .eq("id", user.id)
+        .single();
+      if (!sellerProfile) return;
+      const { streak, isNewDay } = calculateStreak(
+        sellerProfile.last_active_date,
+        sellerProfile.current_streak
+      );
+      if (isNewDay) {
+        const today = new Date().toISOString().slice(0, 10);
+        await supabase
+          .from("profiles")
+          .update({
+            current_streak: streak,
+            longest_streak: Math.max(streak, sellerProfile.longest_streak),
+            last_active_date: today,
+          })
+          .eq("id", user.id);
+      }
+    } catch (err) {
+      console.error("[markCompleted] streak update failed:", err);
+    }
+  })();
 
   revalidatePath("/seller");
   return { success: true };
