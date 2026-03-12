@@ -16,23 +16,11 @@ import type { Order, OrderStatus } from "./types";
 
 interface OrderContextValue {
   orders: Order[];
-  /**
-   * Add an order to local state optimistically. Call this immediately after
-   * placeOrder() succeeds on the server so the buyer sees their order right
-   * away. The Realtime INSERT event will arrive shortly but we deduplicate
-   * by id, so there is no double-add.
-   */
   placeOrder: (order: Order) => void;
-  /**
-   * Update an order's status in local state and propagate via the server
-   * action (sellers call this). The buyer sees the change via Realtime UPDATE.
-   */
   updateOrderStatus: (orderId: string, newStatus: OrderStatus) => void;
-  /**
-   * Mark an order as cancelled locally. The caller is responsible for
-   * persisting the cancellation on the server; this is purely a UI helper.
-   */
   cancelOrder: (orderId: string, cancelledBy: "buyer" | "seller") => void;
+  /** Update an order's items/totals locally after a successful modify action. */
+  modifyOrder: (orderId: string, updates: Partial<Order>) => void;
 }
 
 const OrderContext = createContext<OrderContextValue | null>(null);
@@ -96,7 +84,7 @@ export function OrderProvider({ userId, role, children }: OrderProviderProps) {
       const { data, error } = await supabase
         .from("orders")
         .select(
-          "id, buyer_id, seller_id, restaurant_id, items, special_instructions, status, items_subtotal, seller_fee, platform_fee, total, stripe_payment_intent_id, created_at, updated_at, ready_at"
+          "id, buyer_id, seller_id, restaurant_id, items, special_instructions, status, items_subtotal, seller_fee, platform_fee, total, stripe_payment_intent_id, created_at, updated_at, ready_at, pickup_instructions"
         )
         .eq(column, userId)
         .not("status", "in", '("completed","cancelled")')
@@ -212,9 +200,21 @@ export function OrderProvider({ userId, role, children }: OrderProviderProps) {
     []
   );
 
+  /**
+   * Update an order's items/totals locally after modification.
+   */
+  const modifyOrder = useCallback(
+    (orderId: string, updates: Partial<Order>) => {
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, ...updates } : o))
+      );
+    },
+    []
+  );
+
   const value = useMemo(
-    () => ({ orders, placeOrder, updateOrderStatus, cancelOrder }),
-    [orders, placeOrder, updateOrderStatus, cancelOrder]
+    () => ({ orders, placeOrder, updateOrderStatus, cancelOrder, modifyOrder }),
+    [orders, placeOrder, updateOrderStatus, cancelOrder, modifyOrder]
   );
 
   return <OrderContext.Provider value={value}>{children}</OrderContext.Provider>;

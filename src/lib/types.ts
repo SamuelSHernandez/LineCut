@@ -7,6 +7,8 @@ export interface Restaurant {
   cuisine: string[];
   activeSellers?: number;
   waitEstimate: string;
+  googlePlaceId?: string | null;
+  imageUrl?: string | null;
 }
 
 export interface WaitTimeStats {
@@ -26,6 +28,7 @@ export interface SellerSession {
   estimatedWaitMinutes: number | null;
   sellerFeeCents: number | null;
   status: "active" | "winding_down" | "completed" | "cancelled";
+  pickupInstructions?: string | null;
 }
 
 export interface Seller {
@@ -44,6 +47,8 @@ export interface Seller {
   avgRating: number | null;
   ratingCount: number;
   maxOrderCap: number;
+  kycVerified?: boolean;
+  pickupInstructions?: string | null;
 }
 
 export interface MenuItem {
@@ -52,6 +57,7 @@ export interface MenuItem {
   name: string;
   price: number;
   popular: boolean;
+  imageUrl?: string | null;
 }
 
 export interface OrderItem {
@@ -88,6 +94,7 @@ export interface Order {
   restaurantName: string;
   sellerName: string;
   buyerName: string;
+  pickupInstructions?: string | null;
 }
 
 export interface ChatMessage {
@@ -95,6 +102,17 @@ export interface ChatMessage {
   orderId: string;
   senderId: string;
   body: string;
+  createdAt: string;
+  imageUrl?: string | null;
+  messageType: "text" | "image";
+  reactions?: MessageReaction[];
+}
+
+export interface MessageReaction {
+  id: string;
+  messageId: string;
+  userId: string;
+  emoji: string;
   createdAt: string;
 }
 

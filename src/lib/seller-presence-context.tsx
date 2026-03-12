@@ -48,6 +48,7 @@ interface SellerSessionRow {
   seller_fee_cents: number | null;
   status: "active" | "winding_down" | "completed" | "cancelled";
   created_at: string;
+  pickup_instructions: string | null;
   // Supabase returns joined rows as an array even for one-to-one relations
   // when using the select-string syntax.
   profiles: Array<{
@@ -56,6 +57,8 @@ interface SellerSessionRow {
     avg_rating: number | null;
     rating_count: number;
     max_order_cap: number;
+    kyc_status: string | null;
+    max_concurrent_orders: number;
   }> | null;
 }
 
@@ -71,6 +74,7 @@ function sessionToSeller(
   avgRating: number | null = null,
   ratingCount: number = 0,
   maxOrderCap: number = 5000,
+  kycVerified: boolean = false,
 ): Seller {
   const firstName = displayName.split(" ")[0] ?? displayName;
   const lastInitial = displayName.split(" ")[1]?.[0] ?? "";
@@ -96,6 +100,8 @@ function sessionToSeller(
     avgRating,
     ratingCount,
     maxOrderCap,
+    kycVerified,
+    pickupInstructions: session.pickupInstructions,
   };
 }
 
@@ -128,9 +134,9 @@ interface SellerPresenceProviderProps {
  * subscription is set up dynamically.
  */
 export function SellerPresenceProvider({ children }: SellerPresenceProviderProps) {
-  // Map from sellerId -> { session, displayName, trustScore, avgRating, ratingCount, maxOrderCap }
+  // Map from sellerId -> { session, displayName, trustScore, avgRating, ratingCount, maxOrderCap, kycVerified }
   const [liveMap, setLiveMap] = useState<
-    Map<string, { session: SellerSession; displayName: string; trustScore: number; avgRating: number | null; ratingCount: number; maxOrderCap: number }>
+    Map<string, { session: SellerSession; displayName: string; trustScore: number; avgRating: number | null; ratingCount: number; maxOrderCap: number; kycVerified: boolean }>
   >(new Map());
 
   // The currently watched restaurant (set by whichever detail page is mounted)
@@ -166,7 +172,7 @@ export function SellerPresenceProvider({ children }: SellerPresenceProviderProps
       const { data, error } = await supabase
         .from("seller_sessions")
         .select(
-          "id, seller_id, restaurant_id, started_at, ended_at, wait_duration_minutes, estimated_wait_minutes, seller_fee_cents, status, created_at, profiles(display_name, trust_score, avg_rating, rating_count, max_order_cap)"
+          "id, seller_id, restaurant_id, started_at, ended_at, wait_duration_minutes, estimated_wait_minutes, seller_fee_cents, status, created_at, pickup_instructions, profiles(display_name, trust_score, avg_rating, rating_count, max_order_cap, kyc_status, max_concurrent_orders)"
         )
         .eq("status", "active");
 
@@ -177,18 +183,22 @@ export function SellerPresenceProvider({ children }: SellerPresenceProviderProps
 
       const nextMap = new Map<
         string,
-        { session: SellerSession; displayName: string; trustScore: number; avgRating: number | null; ratingCount: number; maxOrderCap: number }
+        { session: SellerSession; displayName: string; trustScore: number; avgRating: number | null; ratingCount: number; maxOrderCap: number; kycVerified: boolean }
       >();
 
       for (const row of (data as unknown as SellerSessionRow[])) {
         const session = rowToSellerSession(row);
+        if (row.pickup_instructions) {
+          session.pickupInstructions = row.pickup_instructions;
+        }
         const p = row.profiles?.[0];
         const displayName = p?.display_name ?? "Seller";
         const trustScore = p?.trust_score ?? 0;
         const avgRating = p?.avg_rating ?? null;
         const ratingCount = p?.rating_count ?? 0;
         const maxOrderCap = p?.max_order_cap ?? 5000;
-        nextMap.set(session.sellerId, { session, displayName, trustScore, avgRating, ratingCount, maxOrderCap });
+        const kycVerified = p?.kyc_status === "approved";
+        nextMap.set(session.sellerId, { session, displayName, trustScore, avgRating, ratingCount, maxOrderCap, kycVerified });
       }
 
       setTimeout(() => {
@@ -206,7 +216,7 @@ export function SellerPresenceProvider({ children }: SellerPresenceProviderProps
     const supabase = createClient();
     supabase
       .from("profiles")
-      .select("display_name, trust_score, avg_rating, rating_count, max_order_cap")
+      .select("display_name, trust_score, avg_rating, rating_count, max_order_cap, kyc_status")
       .eq("id", session.sellerId)
       .single()
       .then(({ data }) => {
@@ -215,10 +225,11 @@ export function SellerPresenceProvider({ children }: SellerPresenceProviderProps
         const avgRating = data?.avg_rating ?? null;
         const ratingCount = data?.rating_count ?? 0;
         const maxOrderCap = data?.max_order_cap ?? 5000;
+        const kycVerified = data?.kyc_status === "approved";
         setTimeout(() => {
           setLiveMap((prev) => {
             const next = new Map(prev);
-            next.set(session.sellerId, { session, displayName, trustScore, avgRating, ratingCount, maxOrderCap });
+            next.set(session.sellerId, { session, displayName, trustScore, avgRating, ratingCount, maxOrderCap, kycVerified });
             return next;
           });
         }, 0);
@@ -290,7 +301,7 @@ export function SellerPresenceProvider({ children }: SellerPresenceProviderProps
         .filter((e) => e.session.restaurantId === restaurantId)
         // Filter out blocked users (bidirectional)
         .filter((e) => !blockedUserIds.has(e.session.sellerId))
-        .map((e) => sessionToSeller(e.session, e.displayName, e.trustScore, e.avgRating, e.ratingCount, e.maxOrderCap));
+        .map((e) => sessionToSeller(e.session, e.displayName, e.trustScore, e.avgRating, e.ratingCount, e.maxOrderCap, e.kycVerified));
 
       if (live.length > 0) return live;
 

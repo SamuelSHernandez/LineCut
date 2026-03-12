@@ -17,6 +17,8 @@ export const sellers: Seller[] = [
     avgRating: 4.7,
     ratingCount: 38,
     maxOrderCap: 5000,
+    kycVerified: true,
+    pickupInstructions: "Meet outside front door",
   },
   {
     id: "seller-katzs-2",
@@ -34,6 +36,7 @@ export const sellers: Seller[] = [
     avgRating: 4.2,
     ratingCount: 9,
     maxOrderCap: 3000,
+    kycVerified: false,
   },
   {
     id: "seller-joes-1",
@@ -51,6 +54,7 @@ export const sellers: Seller[] = [
     avgRating: null,
     ratingCount: 0,
     maxOrderCap: 5000,
+    kycVerified: true,
   },
   {
     id: "seller-russ-1",
@@ -68,6 +72,8 @@ export const sellers: Seller[] = [
     avgRating: 4.9,
     ratingCount: 55,
     maxOrderCap: 10000,
+    kycVerified: true,
+    pickupInstructions: "Look for me at the counter by the window",
   },
 ];
 

@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { sendPush } from "@/lib/push";
+import { sendNotification } from "@/lib/notify";
 
 interface HandoffResult {
   confirmed: boolean;
@@ -93,20 +93,22 @@ export async function confirmHandoff(
     }
 
     // Notify both parties
-    sendPush({
+    sendNotification({
       userId: order.buyer_id,
       title: "Order complete",
       body: "Hand-off confirmed. Leave a review!",
       url: "/buyer",
       orderId,
+      smsBody: "LineCut: Hand-off confirmed! Leave a review in the app.",
     });
 
-    sendPush({
+    sendNotification({
       userId: order.seller_id,
       title: "Order complete",
       body: "Hand-off confirmed. Leave a review!",
       url: "/seller",
       orderId,
+      smsBody: "LineCut: Hand-off confirmed! Leave a review in the app.",
     });
 
     return { confirmed: true, completed: true };
@@ -122,12 +124,13 @@ export async function confirmHandoff(
   const actorName = actorProfile?.first_name ?? "Your partner";
   const otherId = role === "buyer" ? order.seller_id : order.buyer_id;
 
-  sendPush({
+  sendNotification({
     userId: otherId,
     title: "Confirm hand-off",
     body: `${actorName} confirmed. Please confirm on your end.`,
     url: role === "buyer" ? "/seller" : "/buyer",
     orderId,
+    smsBody: `LineCut: ${actorName} confirmed hand-off. Please confirm on your end.`,
   });
 
   return { confirmed: true, completed: false };

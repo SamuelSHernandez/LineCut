@@ -159,6 +159,7 @@ export function createMockChatMessage(
     senderId: "user-001",
     body: "Hey, I'm at the counter now!",
     createdAt: "2026-03-10T12:05:00Z",
+    messageType: "text" as const,
     ...overrides,
   };
 }

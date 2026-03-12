@@ -31,7 +31,7 @@ export async function getMenuItemsByRestaurant(restaurantId: string): Promise<Me
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("menu_items")
-      .select("id, restaurant_id, name, price, popular")
+      .select("id, restaurant_id, name, price, popular, image_url")
       .eq("restaurant_id", restaurantId)
       .eq("available", true)
       .order("sort_order", { ascending: true });
@@ -46,6 +46,7 @@ export async function getMenuItemsByRestaurant(restaurantId: string): Promise<Me
       name: m.name,
       price: m.price / 100, // cents to dollars
       popular: m.popular,
+      imageUrl: m.image_url ?? null,
     }));
   } catch {
     return fallbackMenuItems.filter((m) => m.restaurantId === restaurantId);
