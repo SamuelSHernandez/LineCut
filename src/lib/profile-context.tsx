@@ -19,6 +19,7 @@ export type Profile = {
   stripeConnectAccountId: string | null;
   stripeConnectStatus: "not_connected" | "pending" | "active" | "restricted";
   maxOrderCap: number;
+  pickupTimeoutMinutes: number;
   avgRating: number | null;
   ratingCount: number;
   paymentMethodLast4: string | null;

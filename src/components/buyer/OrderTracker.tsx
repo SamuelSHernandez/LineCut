@@ -10,6 +10,7 @@ import { useGeofence, formatDistanceMeters } from "@/lib/use-geofence";
 import { restaurants } from "@/lib/restaurant-data";
 import BlockReportButtons from "@/components/shared/BlockReportButtons";
 import { confirmBuyerHandoff } from "@/app/(dashboard)/buyer/order-actions";
+import { cancelReadyOrderNoShow } from "@/app/(dashboard)/seller/order-actions";
 import { getTipForOrder } from "@/app/(dashboard)/buyer/tip-actions";
 import TipPanel from "@/components/buyer/TipPanel";
 import { createClient } from "@/lib/supabase/client";
@@ -143,7 +144,10 @@ export default function OrderTracker({ order, onCancel, onModify }: OrderTracker
       });
   }, [order.id, order.status]);
 
-  // Ready-state elapsed timer
+  // Ready-state elapsed timer + auto-cancel when timeout expires
+  const [readyExpired, setReadyExpired] = useState(false);
+  const cancelTriggeredRef = useRef(false);
+
   useEffect(() => {
     if (order.status !== "ready" || !order.readyAt) return;
 
@@ -153,12 +157,25 @@ export default function OrderTracker({ order, onCancel, onModify }: OrderTracker
       if (elapsed >= READY_REMINDER_MS && !showReminder) {
         setShowReminder(true);
       }
+      if (elapsed >= READY_TIMEOUT_MS) {
+        setReadyExpired(true);
+      }
     }
 
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [order.status, order.readyAt, showReminder]);
+
+  // Auto-trigger no-show cancel from buyer side as well (redundant with seller side, but ensures it fires)
+  useEffect(() => {
+    if (readyExpired && order.status === "ready" && !cancelTriggeredRef.current) {
+      cancelTriggeredRef.current = true;
+      cancelReadyOrderNoShow(order.id).catch((err) =>
+        console.error("[OrderTracker] auto-cancel failed:", err)
+      );
+    }
+  }, [readyExpired, order.status, order.id]);
 
   const handleConfirmHandoff = useCallback(async () => {
     // If geofence hasn't been checked yet, trigger it
@@ -312,11 +329,31 @@ export default function OrderTracker({ order, onCancel, onModify }: OrderTracker
         <div className="space-y-3">
           <div className="border-t border-dashed border-[#ddd4c4]" />
 
-          {/* Elapsed time */}
-          {order.readyAt && (
-            <p className="font-[family-name:var(--font-mono)] text-[11px] text-sidewalk text-center" aria-live="off" aria-label={`Ready for ${elapsedMinutes} minutes and ${elapsedSeconds} seconds`}>
-              Ready for {elapsedMinutes}:{String(elapsedSeconds).padStart(2, "0")}
-            </p>
+          {/* Elapsed time + countdown */}
+          {order.readyAt && !readyExpired && (
+            <div className="text-center">
+              <p className="font-[family-name:var(--font-mono)] text-[11px] text-sidewalk" aria-live="off">
+                Ready for {elapsedMinutes}:{String(elapsedSeconds).padStart(2, "0")}
+              </p>
+              {(() => {
+                const remainingMs = READY_TIMEOUT_MS - elapsedSinceReady;
+                if (remainingMs <= 0) return null;
+                const remainMin = Math.floor(remainingMs / 60000);
+                const remainSec = Math.floor((remainingMs % 60000) / 1000);
+                return (
+                  <p className={`font-[family-name:var(--font-mono)] text-[11px] mt-0.5 ${remainingMs < 120000 ? "text-ketchup" : "text-sidewalk"}`}>
+                    Pick up within {remainMin}:{String(remainSec).padStart(2, "0")}
+                  </p>
+                );
+              })()}
+            </div>
+          )}
+          {readyExpired && (
+            <div className="bg-[#FDECEA] border border-ketchup/20 rounded-[6px] px-3 py-2 text-center">
+              <p className="font-[family-name:var(--font-body)] text-[13px] text-ketchup font-semibold">
+                Pickup window expired. Order is being cancelled.
+              </p>
+            </div>
           )}
 
           {/* Confirmation badges */}
@@ -560,6 +597,25 @@ export default function OrderTracker({ order, onCancel, onModify }: OrderTracker
       {/* Block/report after cancelled orders too */}
       {order.status === "cancelled" && (
         <>
+          {order.cancellationReason === "buyer_no_show" ? (
+            <div className="bg-[#FDECEA] border border-ketchup/20 rounded-[6px] px-4 py-3 text-center space-y-1">
+              <p className="font-[family-name:var(--font-body)] text-[14px] text-ketchup font-semibold">
+                You didn&apos;t pick up in time
+              </p>
+              <p className="font-[family-name:var(--font-body)] text-[12px] text-ketchup/80">
+                You were still charged ${order.total.toFixed(2)}.
+              </p>
+            </div>
+          ) : order.cancellationReason === "seller_cancelled_post_accept" ? (
+            <div className="bg-[#DDEFDD] border border-[#2D6A2D]/20 rounded-[6px] px-4 py-3 text-center space-y-1">
+              <p className="font-[family-name:var(--font-body)] text-[14px] text-[#2D6A2D] font-semibold">
+                Seller cancelled your order
+              </p>
+              <p className="font-[family-name:var(--font-body)] text-[12px] text-[#2D6A2D]/80">
+                You won&apos;t be charged.
+              </p>
+            </div>
+          ) : null}
           <div className="border-t border-dashed border-[#ddd4c4] mt-1 pt-2" />
           <BlockReportButtons
             targetUserId={order.sellerId}

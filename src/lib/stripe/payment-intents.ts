@@ -33,6 +33,27 @@ export async function createOrderPaymentIntent(orderId: string) {
     throw new Error("Seller has no Stripe Connect account");
   }
 
+  // Look up buyer's Stripe customer and saved payment method
+  const { data: buyerProfile } = await supabase
+    .from("profiles")
+    .select("stripe_customer_id")
+    .eq("id", order.buyer_id)
+    .single();
+
+  let savedPaymentMethodId: string | undefined;
+  const buyerCustomerId = buyerProfile?.stripe_customer_id;
+
+  if (buyerCustomerId) {
+    const paymentMethods = await stripe.paymentMethods.list({
+      customer: buyerCustomerId,
+      type: "card",
+      limit: 1,
+    });
+    if (paymentMethods.data.length > 0) {
+      savedPaymentMethodId = paymentMethods.data[0].id;
+    }
+  }
+
   const platformFee = calculatePlatformFeeCents(order.items_subtotal);
 
   const paymentIntent = await stripe.paymentIntents.create(
@@ -40,6 +61,15 @@ export async function createOrderPaymentIntent(orderId: string) {
       amount: order.total,
       currency: "usd",
       capture_method: "manual",
+      ...(buyerCustomerId && { customer: buyerCustomerId }),
+      ...(savedPaymentMethodId && {
+        payment_method: savedPaymentMethodId,
+        confirm: true,
+        automatic_payment_methods: {
+          enabled: true,
+          allow_redirects: "never",
+        },
+      }),
       metadata: {
         order_id: orderId,
         buyer_id: order.buyer_id,
@@ -61,7 +91,10 @@ export async function createOrderPaymentIntent(orderId: string) {
     .update({ stripe_payment_intent_id: paymentIntent.id })
     .eq("id", orderId);
 
-  return paymentIntent;
+  return {
+    ...paymentIntent,
+    savedCardUsed: !!savedPaymentMethodId,
+  };
 }
 
 export async function capturePaymentIntent(orderId: string) {

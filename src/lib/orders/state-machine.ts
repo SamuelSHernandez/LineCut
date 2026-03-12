@@ -85,9 +85,9 @@ export const TRANSITION_MAP: Readonly<
     },
     cancelled: {
       allowedActors: ["system"],
-      sideEffects: ["refund_payment", "notify_both_parties"],
+      sideEffects: ["notify_both_parties"],
       label: "CANCEL",
-      description: "System-initiated cancellation after ready.",
+      description: "System-initiated cancellation after ready. Seller keeps payment (buyer no-show).",
     },
   },
 } as const;
@@ -145,11 +145,14 @@ export function getAvailableTransitions(
 /** Auto-cancel timeout for pending orders (ms) */
 export const PENDING_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
-/** Ready-state timeout: buyer has 15 min to pick up before escalation (ms) */
-export const READY_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+/** Ready-state timeout: default buyer pickup window (ms). Per-seller override via profile. */
+export const READY_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes (default)
 
-/** Ready-state reminder: nudge buyer at 10 min (ms) */
-export const READY_REMINDER_MS = 10 * 60 * 1000; // 10 minutes
+/** Ready-state reminder: nudge buyer at 7 min (ms) */
+export const READY_REMINDER_MS = 7 * 60 * 1000; // 7 minutes
+
+/** Seller cancellation fee in cents when cancelling after accepting */
+export const SELLER_CANCEL_FEE_CENTS = 500; // $5.00
 
 /** Auto-complete after single-party confirmation (ms) */
 export const HANDOFF_AUTO_COMPLETE_MS = 5 * 60 * 1000; // 5 minutes

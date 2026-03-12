@@ -336,6 +336,26 @@ export async function updateMaxOrderCap(formData: FormData) {
   return { error: null, success: true };
 }
 
+export async function updatePickupTimeout(minutes: number) {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  if (!Number.isInteger(minutes) || minutes < 5 || minutes > 30) {
+    return { error: "Pickup timeout must be between 5 and 30 minutes." };
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ pickup_timeout_minutes: minutes })
+    .eq("id", user.id);
+
+  if (error) {
+    return { error: "Failed to update pickup timeout. Please try again." };
+  }
+
+  revalidatePath("/profile", "layout");
+  return { error: null, success: true };
+}
+
 export async function uploadAvatar(formData: FormData) {
   const { supabase, user } = await getAuthenticatedUser();
 

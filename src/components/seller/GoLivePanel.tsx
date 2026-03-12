@@ -12,6 +12,7 @@ import {
   formatDistanceMeters,
   isLikelyDesktop,
 } from "@/lib/use-geofence";
+import { getDistanceMiles, formatDistance } from "@/lib/geo";
 
 function formatElapsed(seconds: number): string {
   const mins = Math.floor(seconds / 60);
@@ -40,6 +41,64 @@ function useElapsedTime(startedAt: string | null): string {
   return elapsed;
 }
 
+/** Max distance (miles) to consider a restaurant "nearby". */
+const NEARBY_RADIUS_MILES = 1.0;
+
+interface RestaurantWithDistance extends Restaurant {
+  distanceMiles: number | null;
+}
+
+type ProximityStatus = "loading" | "ready" | "unavailable";
+
+function useNearbyRestaurants(restaurants: Restaurant[]) {
+  const geolocationAvailable =
+    typeof navigator !== "undefined" && "geolocation" in navigator;
+
+  const [status, setStatus] = useState<ProximityStatus>(
+    () => (!geolocationAvailable || restaurants.length === 0) ? "unavailable" : "loading"
+  );
+  const [sorted, setSorted] = useState<RestaurantWithDistance[]>(
+    () => restaurants.map((r) => ({ ...r, distanceMiles: null }))
+  );
+
+  useEffect(() => {
+    if (!geolocationAvailable || restaurants.length === 0) return;
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        const withDistance = restaurants.map((r) => ({
+          ...r,
+          distanceMiles: getDistanceMiles(latitude, longitude, r.lat, r.lng),
+        }));
+        // Sort by distance ascending
+        withDistance.sort((a, b) => a.distanceMiles - b.distanceMiles);
+        setSorted(withDistance);
+        setStatus("ready");
+      },
+      () => {
+        // Permission denied or error — show all, no distances
+        setStatus("unavailable");
+      },
+      { enableHighAccuracy: true, timeout: 8_000, maximumAge: 60_000 }
+    );
+  }, [restaurants, geolocationAvailable]);
+
+  const nearby = status === "ready"
+    ? sorted.filter((r) => r.distanceMiles !== null && r.distanceMiles <= NEARBY_RADIUS_MILES)
+    : sorted;
+  const other = status === "ready"
+    ? sorted.filter((r) => r.distanceMiles !== null && r.distanceMiles > NEARBY_RADIUS_MILES)
+    : [];
+
+  // The closest restaurant ID, available once proximity resolves
+  const closestId = status === "ready" && nearby.length > 0
+    ? nearby[0].id
+    : null;
+
+  return { status, nearby, other, closestId };
+}
+
 interface GoLivePanelProps {
   restaurants: Restaurant[];
   activeSession: SellerSession | null;
@@ -48,6 +107,44 @@ interface GoLivePanelProps {
   suggestedWaitMinutes?: number | null;
   completedDeliveries?: number;
   openStatus?: Record<string, boolean | null>;
+}
+
+function RestaurantOption({
+  restaurant,
+  selected,
+  onSelect,
+  showDistance,
+}: {
+  restaurant: RestaurantWithDistance;
+  selected: boolean;
+  onSelect: () => void;
+  showDistance: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={onSelect}
+      className={`w-full text-left px-4 min-h-[48px] rounded-[6px] font-[family-name:var(--font-body)] text-[14px] transition-colors focus:outline-none focus:ring-2 focus:ring-mustard/50 flex items-center justify-between ${
+        selected
+          ? "bg-[#FFF3D6] border-2 border-mustard text-chalkboard"
+          : "bg-butcher-paper border border-[#ddd4c4] text-sidewalk hover:border-mustard"
+      }`}
+    >
+      <span>
+        <span className="font-semibold">{restaurant.name}</span>
+        <span className="text-[12px] text-sidewalk ml-2">
+          {restaurant.address}
+        </span>
+      </span>
+      {showDistance && restaurant.distanceMiles !== null && (
+        <span className="text-[11px] text-sidewalk font-[family-name:var(--font-mono)] whitespace-nowrap ml-3">
+          {formatDistance(restaurant.distanceMiles)}
+        </span>
+      )}
+    </button>
+  );
 }
 
 export default function GoLivePanel({
@@ -60,9 +157,11 @@ export default function GoLivePanel({
   openStatus,
 }: GoLivePanelProps) {
   const experienceTier = getExperienceTier(completedDeliveries);
+  const proximity = useNearbyRestaurants(restaurants);
   const [selectedRestaurant, setSelectedRestaurant] = useState(
     restaurants[0]?.id ?? ""
   );
+  const [showAllRestaurants, setShowAllRestaurants] = useState(false);
   const [activeSession, setActiveSession] = useState(initialSession);
   const elapsed = useElapsedTime(activeSession?.startedAt ?? null);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +172,15 @@ export default function GoLivePanel({
   const [fee, setFee] = useState("5.00");
   const [pickupInstructions, setPickupInstructions] = useState("");
   const router = useRouter();
+
+  // Auto-select closest restaurant when proximity resolves.
+  // The closestId changes from null → an ID exactly once when geolocation
+  // succeeds. We track the last value we acted on to detect the transition.
+  const [lastAppliedClosest, setLastAppliedClosest] = useState<string | null>(null);
+  if (proximity.closestId && proximity.closestId !== lastAppliedClosest) {
+    setLastAppliedClosest(proximity.closestId);
+    setSelectedRestaurant(proximity.closestId);
+  }
 
   function handleSelectTier(tier: WaitTier) {
     setSelectedTier(tier);
@@ -343,27 +451,61 @@ export default function GoLivePanel({
         <>
           <fieldset className="mb-4 border-none p-0 m-0">
             <legend className="block font-[family-name:var(--font-mono)] text-[11px] tracking-[2px] uppercase text-sidewalk mb-2">
-              SELECT RESTAURANT
+              {proximity.status === "loading" ? "FINDING NEARBY..." : "SELECT RESTAURANT"}
             </legend>
             <div className="space-y-2" role="radiogroup">
-              {restaurants.map((r) => (
-                <button
+              {proximity.status === "loading" && (
+                <div className="flex items-center gap-2 px-4 py-3 text-[13px] text-sidewalk font-[family-name:var(--font-body)]">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-sidewalk/30 border-t-sidewalk" />
+                  Checking your location...
+                </div>
+              )}
+              {proximity.status !== "loading" && proximity.nearby.map((r) => (
+                <RestaurantOption
                   key={r.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={selectedRestaurant === r.id}
-                  onClick={() => setSelectedRestaurant(r.id)}
-                  className={`w-full text-left px-4 min-h-[48px] rounded-[6px] font-[family-name:var(--font-body)] text-[14px] transition-colors focus:outline-none focus:ring-2 focus:ring-mustard/50 ${
-                    selectedRestaurant === r.id
-                      ? "bg-[#FFF3D6] border-2 border-mustard text-chalkboard"
-                      : "bg-butcher-paper border border-[#ddd4c4] text-sidewalk hover:border-mustard"
-                  }`}
-                >
-                  <span className="font-semibold">{r.name}</span>
-                  <span className="text-[12px] text-sidewalk ml-2">
-                    {r.address}
-                  </span>
-                </button>
+                  restaurant={r}
+                  selected={selectedRestaurant === r.id}
+                  onSelect={() => setSelectedRestaurant(r.id)}
+                  showDistance={proximity.status === "ready"}
+                />
+              ))}
+              {proximity.status === "ready" && proximity.nearby.length === 0 && (
+                <p className="px-4 py-3 text-[13px] text-sidewalk font-[family-name:var(--font-body)]">
+                  No restaurants within walking distance. Showing all locations.
+                </p>
+              )}
+              {proximity.other.length > 0 && (
+                <>
+                  {!showAllRestaurants && proximity.nearby.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllRestaurants(true)}
+                      className="w-full text-center py-2 text-[12px] font-medium text-sidewalk hover:text-chalkboard transition-colors font-[family-name:var(--font-body)] cursor-pointer"
+                    >
+                      + {proximity.other.length} more location{proximity.other.length !== 1 ? "s" : ""}
+                    </button>
+                  ) : (
+                    proximity.other.map((r) => (
+                      <RestaurantOption
+                        key={r.id}
+                        restaurant={r}
+                        selected={selectedRestaurant === r.id}
+                        onSelect={() => setSelectedRestaurant(r.id)}
+                        showDistance={proximity.status === "ready"}
+                      />
+                    ))
+                  )}
+                </>
+              )}
+              {/* When no nearby found, auto-expand all */}
+              {proximity.status === "ready" && proximity.nearby.length === 0 && proximity.other.map((r) => (
+                <RestaurantOption
+                  key={r.id}
+                  restaurant={r}
+                  selected={selectedRestaurant === r.id}
+                  onSelect={() => setSelectedRestaurant(r.id)}
+                  showDistance
+                />
               ))}
             </div>
           </fieldset>

@@ -45,6 +45,23 @@ interface OrderRow {
   ready_at: string | null;
 }
 
+interface EnrichedOrderRow extends OrderRow {
+  restaurants?: { name: string } | null;
+  seller?: { display_name: string } | null;
+  buyer?: { display_name: string } | null;
+}
+
+/** Enrich an OrderRow with joined display names */
+function enrichedRowToOrder(row: EnrichedOrderRow): Order {
+  const base = rowToOrder(row);
+  return {
+    ...base,
+    restaurantName: row.restaurants?.name ?? "",
+    sellerName: row.seller?.display_name ?? "",
+    buyerName: row.buyer?.display_name ?? "",
+  };
+}
+
 // ── Provider ─────────────────────────────────────────────────────────────────
 
 interface OrderProviderProps {
@@ -84,7 +101,7 @@ export function OrderProvider({ userId, role, children }: OrderProviderProps) {
       const { data, error } = await supabase
         .from("orders")
         .select(
-          "id, buyer_id, seller_id, restaurant_id, items, special_instructions, status, items_subtotal, seller_fee, platform_fee, total, stripe_payment_intent_id, created_at, updated_at, ready_at, pickup_instructions"
+          "id, buyer_id, seller_id, restaurant_id, items, special_instructions, status, items_subtotal, seller_fee, platform_fee, total, stripe_payment_intent_id, created_at, updated_at, ready_at, pickup_instructions, restaurants(name), seller:profiles!orders_seller_id_fkey(display_name), buyer:profiles!orders_buyer_id_fkey(display_name)"
         )
         .eq(column, userId)
         .not("status", "in", '("completed","cancelled")')
@@ -95,7 +112,7 @@ export function OrderProvider({ userId, role, children }: OrderProviderProps) {
         return;
       }
 
-      const fetched = (data as OrderRow[]).map(rowToOrder);
+      const fetched = (data as unknown as EnrichedOrderRow[]).map(enrichedRowToOrder);
 
       setTimeout(() => {
         setOrders((prev) => {
@@ -103,7 +120,20 @@ export function OrderProvider({ userId, role, children }: OrderProviderProps) {
           // and update any that already exist with the fresh DB data.
           const dbIds = new Set(fetched.map((o) => o.id));
           const optimisticOnly = prev.filter((o) => !dbIds.has(o.id));
-          return [...fetched, ...optimisticOnly];
+          // Preserve optimistic display names when DB names are present
+          const merged = fetched.map((fresh) => {
+            const existing = prev.find((o) => o.id === fresh.id);
+            if (existing) {
+              return {
+                ...fresh,
+                restaurantName: fresh.restaurantName || existing.restaurantName,
+                sellerName: fresh.sellerName || existing.sellerName,
+                buyerName: fresh.buyerName || existing.buyerName,
+              };
+            }
+            return fresh;
+          });
+          return [...merged, ...optimisticOnly];
         });
       }, 0);
     }
@@ -154,8 +184,62 @@ export function OrderProvider({ userId, role, children }: OrderProviderProps) {
     role,
     userId,
     onInsert: role === "seller" ? handleInsert : undefined,
-    onUpdate: role === "buyer" ? handleUpdate : undefined,
+    onUpdate: handleUpdate,
   });
+
+  // ── Poll fallback: re-fetch active orders every 5s ──────────────────────
+  // Realtime is the primary transport, but can be slow to connect on initial
+  // page load or when the browser tab regains focus. This lightweight poll
+  // ensures the UI stays current.
+  useEffect(() => {
+    if (!userId) return;
+
+    const supabase = createClient();
+
+    async function poll() {
+      const column = role === "seller" ? "seller_id" : "buyer_id";
+      const { data } = await supabase
+        .from("orders")
+        .select(
+          "id, buyer_id, seller_id, restaurant_id, items, special_instructions, status, items_subtotal, seller_fee, platform_fee, total, stripe_payment_intent_id, created_at, updated_at, ready_at, pickup_instructions, restaurants(name), seller:profiles!orders_seller_id_fkey(display_name), buyer:profiles!orders_buyer_id_fkey(display_name)"
+        )
+        .eq(column, userId)
+        .not("status", "in", '("completed","cancelled")')
+        .order("created_at", { ascending: false });
+
+      if (!data) return;
+
+      const fetched = (data as unknown as EnrichedOrderRow[]).map(enrichedRowToOrder);
+
+      setOrders((prev) => {
+        const dbIds = new Set(fetched.map((o) => o.id));
+        const optimisticOnly = prev.filter((o) => !dbIds.has(o.id));
+
+        // Merge: update existing orders with fresh DB data, preserve display fields
+        const merged = fetched.map((fresh) => {
+          const existing = prev.find((o) => o.id === fresh.id);
+          if (existing) {
+            return {
+              ...existing,
+              status: fresh.status,
+              statusUpdatedAt: fresh.statusUpdatedAt,
+              readyAt: fresh.readyAt ?? existing.readyAt,
+              // Use fetched names if available, fall back to existing
+              restaurantName: fresh.restaurantName || existing.restaurantName,
+              sellerName: fresh.sellerName || existing.sellerName,
+              buyerName: fresh.buyerName || existing.buyerName,
+            };
+          }
+          return fresh;
+        });
+
+        return [...merged, ...optimisticOnly];
+      });
+    }
+
+    const interval = setInterval(poll, 5000);
+    return () => clearInterval(interval);
+  }, [userId, role]);
 
   // ── Imperative actions ─────────────────────────────────────────────────
 

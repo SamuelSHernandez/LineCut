@@ -6,7 +6,7 @@ import ReviewForm from "@/components/shared/ReviewForm";
 import DisputeForm from "@/components/shared/DisputeForm";
 import BlockReportButtons from "@/components/shared/BlockReportButtons";
 import ChatPanel from "@/components/shared/ChatPanel";
-import { PENDING_TIMEOUT_MS, READY_TIMEOUT_MS } from "@/lib/orders/state-machine";
+import { PENDING_TIMEOUT_MS, SELLER_CANCEL_FEE_CENTS } from "@/lib/orders/state-machine";
 import { useProfile } from "@/lib/profile-context";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -15,7 +15,8 @@ import {
   markInProgress,
   markReady,
   markCompleted,
-  forceComplete,
+  cancelReadyOrderNoShow,
+  cancelAcceptedOrder,
 } from "@/app/(dashboard)/seller/order-actions";
 
 interface SellerOrderCardProps {
@@ -77,6 +78,12 @@ export default function SellerOrderCard({
   const [readyExpireSeconds, setReadyExpireSeconds] = useState<number | null>(null);
   const [readyExpired, setReadyExpired] = useState(false);
 
+  // Seller cancellation fee confirmation
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+
+  // Per-seller pickup timeout
+  const pickupTimeoutMs = profile.pickupTimeoutMinutes * 60 * 1000;
+
   // ── Time-ago ticker ───────────────────────────────────────
   useEffect(() => {
     const interval = setInterval(() => {
@@ -111,7 +118,7 @@ export default function SellerOrderCard({
     }
 
     const readyMs = new Date(order.readyAt).getTime();
-    const expiresAt = readyMs + READY_TIMEOUT_MS;
+    const expiresAt = readyMs + pickupTimeoutMs;
 
     function tick() {
       const remaining = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
@@ -125,7 +132,7 @@ export default function SellerOrderCard({
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [order.status, order.readyAt]);
+  }, [order.status, order.readyAt, pickupTimeoutMs]);
 
   // ── Server action dispatcher ──────────────────────────────
   const handleAction = useCallback(
@@ -203,17 +210,17 @@ export default function SellerOrderCard({
     return () => clearInterval(interval);
   }, [order.status, order.createdAt, order.id]);
 
-  const handleForceComplete = useCallback(async () => {
+  const handleNoShowCancel = useCallback(async () => {
     if (isProcessing) return;
     setIsProcessing(true);
     setActionError(null);
 
     try {
-      const result = await forceComplete(order.id);
+      const result = await cancelReadyOrderNoShow(order.id);
       if (result.error) {
         setActionError(result.error);
       } else {
-        onStatusChange(order.id, "completed");
+        onStatusChange(order.id, "cancelled");
       }
     } catch {
       setActionError("Something went wrong. Try again.");
@@ -221,6 +228,35 @@ export default function SellerOrderCard({
       setIsProcessing(false);
     }
   }, [isProcessing, onStatusChange, order.id]);
+
+  const handleCancelAccepted = useCallback(async () => {
+    if (isProcessing) return;
+    setIsProcessing(true);
+    setActionError(null);
+
+    try {
+      const result = await cancelAcceptedOrder(order.id);
+      if (result.error) {
+        setActionError(result.error);
+      } else {
+        onStatusChange(order.id, "cancelled");
+        setShowCancelConfirm(false);
+      }
+    } catch {
+      setActionError("Something went wrong. Try again.");
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [isProcessing, onStatusChange, order.id]);
+
+  // Auto-trigger no-show cancel when ready timeout expires
+  const noShowRef = useRef(handleNoShowCancel);
+  noShowRef.current = handleNoShowCancel;
+  useEffect(() => {
+    if (readyExpired && order.status === "ready") {
+      noShowRef.current();
+    }
+  }, [readyExpired, order.status]);
 
   const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -378,36 +414,100 @@ export default function SellerOrderCard({
       )}
 
       {order.status === "accepted" && (
-        <div>
+        <div className="space-y-2">
           <button
             type="button"
             onClick={() => handleAction("in-progress")}
             disabled={isProcessing}
             aria-label={`Mark ${buyerName}'s order as started`}
-            className="w-full min-h-[48px] bg-mustard text-chalkboard font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] tracking-[1px] active:scale-[0.98] transition-transform focus:outline-none focus:ring-2 focus:ring-mustard/50 disabled:opacity-60"
+            className="w-full min-h-[48px] bg-[#2D6A2D] text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] tracking-[1px] active:scale-[0.98] transition-transform focus:outline-none focus:ring-2 focus:ring-[#2D6A2D]/50 disabled:opacity-60"
           >
-            {isProcessing ? "..." : "STARTED ORDERING"}
+            {isProcessing ? "..." : "AT THE COUNTER"}
           </button>
-          <p className="font-[family-name:var(--font-body)] text-[11px] text-sidewalk text-center mt-1.5">
+          <p className="font-[family-name:var(--font-body)] text-[11px] text-sidewalk text-center">
             Tap when you&apos;ve placed their order at the counter.
           </p>
+          {!showCancelConfirm ? (
+            <button
+              type="button"
+              onClick={() => setShowCancelConfirm(true)}
+              className="w-full font-[family-name:var(--font-body)] text-[12px] text-ketchup py-1"
+            >
+              Cancel order
+            </button>
+          ) : (
+            <div className="bg-[#FDECEA] border border-ketchup/20 rounded-[6px] px-3 py-3 space-y-2">
+              <p className="font-[family-name:var(--font-body)] text-[12px] text-ketchup font-semibold text-center">
+                Cancelling after accepting costs a ${(SELLER_CANCEL_FEE_CENTS / 100).toFixed(0)} fee. Are you sure?
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleCancelAccepted}
+                  disabled={isProcessing}
+                  className="flex-1 min-h-[40px] bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[13px] font-semibold rounded-[6px] disabled:opacity-60"
+                >
+                  {isProcessing ? "..." : "YES, CANCEL"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCancelConfirm(false)}
+                  className="flex-1 min-h-[40px] bg-ticket border border-[#eee6d8] text-chalkboard font-[family-name:var(--font-body)] text-[13px] font-semibold rounded-[6px]"
+                >
+                  KEEP ORDER
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {order.status === "in-progress" && (
-        <div>
+        <div className="space-y-2">
           <button
             type="button"
             onClick={() => handleAction("ready")}
             disabled={isProcessing}
             aria-label={`Mark ${buyerName}'s order as ready`}
-            className="w-full min-h-[48px] bg-mustard text-chalkboard font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] tracking-[1px] active:scale-[0.98] transition-transform focus:outline-none focus:ring-2 focus:ring-mustard/50 disabled:opacity-60"
+            className="w-full min-h-[48px] bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] tracking-[1px] active:scale-[0.98] transition-transform focus:outline-none focus:ring-2 focus:ring-ketchup/50 disabled:opacity-60"
           >
-            {isProcessing ? "..." : "ORDER'S READY"}
+            {isProcessing ? "..." : "FOOD IS READY"}
           </button>
-          <p className="font-[family-name:var(--font-body)] text-[11px] text-sidewalk text-center mt-1.5">
+          <p className="font-[family-name:var(--font-body)] text-[11px] text-sidewalk text-center">
             Tap when you&apos;ve got the food in hand. Payment will be captured.
           </p>
+          {!showCancelConfirm ? (
+            <button
+              type="button"
+              onClick={() => setShowCancelConfirm(true)}
+              className="w-full font-[family-name:var(--font-body)] text-[12px] text-ketchup py-1"
+            >
+              Cancel order
+            </button>
+          ) : (
+            <div className="bg-[#FDECEA] border border-ketchup/20 rounded-[6px] px-3 py-3 space-y-2">
+              <p className="font-[family-name:var(--font-body)] text-[12px] text-ketchup font-semibold text-center">
+                Cancelling after accepting costs a ${(SELLER_CANCEL_FEE_CENTS / 100).toFixed(0)} fee. Are you sure?
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleCancelAccepted}
+                  disabled={isProcessing}
+                  className="flex-1 min-h-[40px] bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[13px] font-semibold rounded-[6px] disabled:opacity-60"
+                >
+                  {isProcessing ? "..." : "YES, CANCEL"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCancelConfirm(false)}
+                  className="flex-1 min-h-[40px] bg-ticket border border-[#eee6d8] text-chalkboard font-[family-name:var(--font-body)] text-[13px] font-semibold rounded-[6px]"
+                >
+                  KEEP ORDER
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -478,22 +578,14 @@ export default function SellerOrderCard({
         </div>
       )}
 
-      {/* Ready expired — escalation options */}
+      {/* Ready expired — buyer no-show, auto-cancelling */}
       {order.status === "ready" && readyExpired && (
         <div className="space-y-3">
           <div className="bg-[#FFF3D6] border border-[#8B6914]/20 rounded-[6px] px-3 py-2 text-center">
             <p className="font-[family-name:var(--font-body)] text-[13px] text-[#8B6914] font-semibold">
-              Buyer didn&apos;t show
+              {isProcessing ? "Cancelling order..." : "Buyer didn\u2019t show \u2014 order cancelled. You keep the payment."}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleForceComplete}
-            disabled={isProcessing}
-            className="w-full min-h-[48px] bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] tracking-[1px] active:scale-[0.98] transition-transform focus:outline-none focus:ring-2 focus:ring-ketchup/50 disabled:opacity-60"
-          >
-            {isProcessing ? "..." : "COMPLETE ANYWAY"}
-          </button>
         </div>
       )}
 

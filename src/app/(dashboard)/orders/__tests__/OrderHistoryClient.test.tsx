@@ -46,6 +46,7 @@ function createProfile(overrides?: Partial<Profile>): Profile {
     stripeConnectAccountId: null,
     stripeConnectStatus: "not_connected",
     maxOrderCap: 5000,
+    pickupTimeoutMinutes: 10,
     avgRating: null,
     ratingCount: 0,
     paymentMethodLast4: null,

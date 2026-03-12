@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { useProfile } from "@/lib/profile-context";
-import { updateMaxOrderCap } from "@/app/(dashboard)/profile/actions";
+import { updateMaxOrderCap, updatePickupTimeout } from "@/app/(dashboard)/profile/actions";
 
 export default function SellerPreferencesSection() {
   const profile = useProfile();
   const [capDollars, setCapDollars] = useState(Math.round(profile.maxOrderCap / 100));
+  const [pickupTimeout, setPickupTimeout] = useState(profile.pickupTimeoutMinutes);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,6 +22,15 @@ export default function SellerPreferencesSection() {
     const formData = new FormData();
     formData.set("maxOrderCap", String(capDollars));
     const result = await updateMaxOrderCap(formData);
+
+    if (!result.error) {
+      const timeoutResult = await updatePickupTimeout(pickupTimeout);
+      if (timeoutResult.error) {
+        setSaving(false);
+        setError(timeoutResult.error);
+        return;
+      }
+    }
 
     setSaving(false);
     if (result.error) {
@@ -59,6 +69,30 @@ export default function SellerPreferencesSection() {
           </div>
           <p className="font-[family-name:var(--font-body)] text-[11px] text-sidewalk mt-1">
             The most you&apos;re willing to front at the register.
+          </p>
+        </label>
+
+        <label className="block">
+          <span className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[2px] text-sidewalk">
+            BUYER PICKUP WINDOW
+          </span>
+          <div className="flex items-center gap-3 mt-2">
+            <input
+              type="range"
+              min={5}
+              max={30}
+              step={1}
+              value={pickupTimeout}
+              onChange={(e) => setPickupTimeout(Number(e.target.value))}
+              className="flex-1 accent-ketchup"
+              aria-label="Buyer pickup window in minutes"
+            />
+            <span className="font-[family-name:var(--font-display)] text-[18px] tracking-[1px] text-ketchup min-w-[60px] text-right">
+              {pickupTimeout}m
+            </span>
+          </div>
+          <p className="font-[family-name:var(--font-body)] text-[11px] text-sidewalk mt-1">
+            How long a buyer has to pick up after food is ready. Order auto-cancels after this.
           </p>
         </label>
 

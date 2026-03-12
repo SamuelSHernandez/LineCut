@@ -95,6 +95,7 @@ export interface Order {
   sellerName: string;
   buyerName: string;
   pickupInstructions?: string | null;
+  cancellationReason?: string | null;
 }
 
 export interface ChatMessage {

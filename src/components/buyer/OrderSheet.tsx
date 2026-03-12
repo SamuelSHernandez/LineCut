@@ -141,10 +141,16 @@ export default function OrderSheet({
       return;
     }
 
-    if (result.clientSecret && result.orderId) {
-      setClientSecret(result.clientSecret);
+    if (result.orderId) {
       setOrderId(result.orderId);
-      setStep("payment");
+
+      if (result.savedCardUsed) {
+        // Saved card was auto-confirmed server-side — skip to tracking
+        handlePaymentSuccessWithOrderId(result.orderId);
+      } else if (result.clientSecret) {
+        setClientSecret(result.clientSecret);
+        setStep("payment");
+      }
     }
   }
 
@@ -181,6 +187,38 @@ export default function OrderSheet({
     });
 
     onClose();
+  }
+
+  function handlePaymentSuccessWithOrderId(resolvedOrderId: string) {
+    const now = new Date().toISOString();
+    const fullOrder: Order = {
+      id: resolvedOrderId,
+      buyerId: profile.id,
+      sellerId: seller.id,
+      restaurantId: seller.restaurantId,
+      items: orderItemsArray.map((item) => ({
+        menuItemId: item.menuItemId,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+      })),
+      specialInstructions,
+      status: "pending",
+      itemsSubtotal,
+      sellerFee: seller.fee,
+      platformFee,
+      total,
+      stripePaymentIntentId: null,
+      createdAt: now,
+      statusUpdatedAt: now,
+      restaurantName,
+      sellerName: seller.lastInitial ? `${seller.firstName} ${seller.lastInitial}.` : seller.firstName,
+      buyerName: profile.displayName,
+    };
+
+    placeOrderContext(fullOrder);
+    setTrackedOrder(fullOrder);
+    setStep("tracking");
   }
 
   function handlePaymentSuccess() {

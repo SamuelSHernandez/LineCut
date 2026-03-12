@@ -19,7 +19,7 @@ export default async function DashboardLayout({
 
   const { data: row, error: profileError } = await supabase
     .from("profiles")
-    .select("id, display_name, is_buyer, is_seller, avatar_url, trust_score, email, phone, bio, neighborhood, phone_verified, email_verified, stripe_customer_id, stripe_connect_account_id, stripe_connect_status, max_order_cap, avg_rating, rating_count, payment_method_last4, payment_method_brand, payment_method_exp_month, payment_method_exp_year, kyc_status, created_at")
+    .select("id, display_name, is_buyer, is_seller, avatar_url, trust_score, email, phone, bio, neighborhood, phone_verified, email_verified, stripe_customer_id, stripe_connect_account_id, stripe_connect_status, max_order_cap, pickup_timeout_minutes, avg_rating, rating_count, payment_method_last4, payment_method_brand, payment_method_exp_month, payment_method_exp_year, kyc_status, created_at")
     .eq("id", user.id)
     .single();
 
@@ -46,6 +46,7 @@ export default async function DashboardLayout({
         stripeConnectAccountId: row.stripe_connect_account_id,
         stripeConnectStatus: row.stripe_connect_status,
         maxOrderCap: row.max_order_cap,
+        pickupTimeoutMinutes: row.pickup_timeout_minutes ?? 10,
         avgRating: row.avg_rating ? Number(row.avg_rating) : null,
         ratingCount: row.rating_count,
         paymentMethodLast4: row.payment_method_last4,
@@ -73,6 +74,7 @@ export default async function DashboardLayout({
         stripeConnectAccountId: null,
         stripeConnectStatus: "not_connected",
         maxOrderCap: 5000,
+        pickupTimeoutMinutes: 10,
         avgRating: null,
         ratingCount: 0,
         paymentMethodLast4: null,

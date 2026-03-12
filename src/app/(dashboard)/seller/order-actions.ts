@@ -10,6 +10,8 @@ import { sendNotification } from "@/lib/notify";
 import { confirmHandoff } from "@/lib/handoff";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { calculateStreak } from "@/lib/gamification";
+import { SYSTEM_ACTOR_ID, SELLER_CANCEL_FEE_CENTS } from "@/lib/orders/state-machine";
+import { stripe } from "@/lib/stripe";
 
 /** Look up buyer_id for an order (used to send push notifications). */
 async function getBuyerId(orderId: string): Promise<string | null> {
@@ -294,30 +296,126 @@ export async function markCompleted(orderId: string): Promise<ActionResult> {
 }
 
 /**
- * Seller force-completes after timeout (buyer didn't show or didn't confirm).
+ * System-initiated cancellation when buyer doesn't pick up a ready order.
+ * Seller keeps the payment — no refund issued.
  */
-export async function forceComplete(orderId: string): Promise<ActionResult> {
-  const { user } = await getAuthenticatedUser();
+export async function cancelReadyOrderNoShow(orderId: string): Promise<ActionResult> {
+  await getAuthenticatedUser(); // auth gate
 
-  const result = await callTransitionRpc(orderId, "completed", user.id, {
-    unilateral: true,
-    reason: "seller_force_complete",
+  const result = await callTransitionRpc(orderId, "cancelled", SYSTEM_ACTOR_ID, {
+    reason: "buyer_no_show",
   });
 
   if (result.error) {
     return { error: result.error, errorCode: result.errorCode };
   }
 
-  // Partial refund: buyer gets platform fee back (seller did the work)
-  try {
-    const { refundPartialPlatformFee } = await import(
-      "@/lib/stripe/payment-intents"
-    );
-    await refundPartialPlatformFee(orderId);
-  } catch (err) {
-    console.error("[forceComplete] Partial refund failed:", err);
-    // Don't block the completion — refund can be handled manually
+  // Fetch order details for notifications
+  const supabase = await createClient();
+  const { data: order } = await supabase
+    .from("orders")
+    .select("buyer_id, seller_id, total")
+    .eq("id", orderId)
+    .single();
+
+  if (order) {
+    const totalStr = `$${(order.total / 100).toFixed(2)}`;
+
+    sendNotification({
+      userId: order.buyer_id,
+      title: "Order cancelled — no pickup",
+      body: `You didn't pick up in time. You were charged ${totalStr}.`,
+      url: `/buyer`,
+      orderId,
+      smsBody: `LineCut: You didn't pick up in time. You were charged ${totalStr}.`,
+    }).catch((err) => console.error("[cancelReadyOrderNoShow] buyer notify failed:", err));
+
+    sendNotification({
+      userId: order.seller_id,
+      title: "Buyer didn't show",
+      body: `Order cancelled — buyer didn't show. You keep the payment.`,
+      url: `/seller`,
+      orderId,
+      smsBody: `LineCut: Buyer didn't show. Order cancelled. You keep the payment.`,
+    }).catch((err) => console.error("[cancelReadyOrderNoShow] seller notify failed:", err));
   }
+
+  revalidatePath("/seller");
+  return { success: true };
+}
+
+/**
+ * Seller cancels an accepted or in-progress order.
+ * Buyer's payment is voided. Seller is charged a $5 cancellation fee.
+ */
+export async function cancelAcceptedOrder(orderId: string): Promise<ActionResult> {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  // Fetch order and seller profile
+  const { data: order } = await supabase
+    .from("orders")
+    .select("stripe_payment_intent_id, status, buyer_id")
+    .eq("id", orderId)
+    .single();
+
+  if (!order) {
+    return { error: "Order not found.", errorCode: "ORDER_NOT_FOUND" };
+  }
+
+  if (order.status !== "accepted" && order.status !== "in-progress") {
+    return { error: "Order can only be cancelled when accepted or in-progress.", errorCode: "INVALID_TRANSITION" };
+  }
+
+  // Fetch seller's Stripe Connect account for the fee charge
+  const { data: sellerProfile } = await supabase
+    .from("profiles")
+    .select("stripe_connect_account_id")
+    .eq("id", user.id)
+    .single();
+
+  // Void the buyer's payment
+  if (order.stripe_payment_intent_id) {
+    try {
+      await cancelPaymentIntent(orderId);
+    } catch (err) {
+      console.error("[cancelAcceptedOrder] cancelPaymentIntent error:", err);
+    }
+  }
+
+  // Transition order to cancelled
+  const result = await callTransitionRpc(orderId, "cancelled", user.id, {
+    reason: "seller_cancelled_post_accept",
+    fee_charged: SELLER_CANCEL_FEE_CENTS,
+  });
+
+  if (result.error) {
+    return { error: result.error, errorCode: result.errorCode };
+  }
+
+  // Charge the seller a cancellation fee via their Connect account
+  if (sellerProfile?.stripe_connect_account_id) {
+    try {
+      await stripe.charges.create({
+        amount: SELLER_CANCEL_FEE_CENTS,
+        currency: "usd",
+        source: sellerProfile.stripe_connect_account_id,
+        description: `LineCut cancellation fee — Order ${orderId.slice(0, 8)}`,
+      });
+    } catch (err) {
+      // Log but don't block — fee can be collected later
+      console.error("[cancelAcceptedOrder] fee charge failed:", err);
+    }
+  }
+
+  // Notify buyer
+  sendNotification({
+    userId: order.buyer_id,
+    title: "Order cancelled by seller",
+    body: "Your seller cancelled the order. You won't be charged.",
+    url: `/buyer`,
+    orderId,
+    smsBody: "LineCut: Your seller cancelled the order. You won't be charged.",
+  }).catch((err) => console.error("[cancelAcceptedOrder] notify failed:", err));
 
   revalidatePath("/seller");
   return { success: true };

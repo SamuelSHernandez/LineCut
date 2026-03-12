@@ -20,7 +20,7 @@ export default function MenuItemPill({
   const isSelected = quantity > 0;
 
   return (
-    <div className="inline-flex items-center gap-0">
+    <div className="inline-flex items-center h-[38px]">
       <button
         type="button"
         onClick={onToggle}
@@ -30,7 +30,7 @@ export default function MenuItemPill({
             : `Add ${item.name} to order, estimated $${item.price.toFixed(2)}`
         }
         aria-pressed={isSelected}
-        className={`inline-flex items-center gap-2 px-3 min-h-[44px] font-[family-name:var(--font-body)] text-[13px] transition-all duration-200 ${
+        className={`inline-flex items-center gap-2 px-3 h-full font-[family-name:var(--font-body)] text-[13px] transition-all duration-200 ${
           isSelected
             ? "bg-ketchup text-ticket rounded-l-full border border-ketchup"
             : "bg-butcher-paper text-chalkboard rounded-full border border-[#ddd4c4] hover:border-ketchup hover:text-ketchup"
@@ -47,17 +47,17 @@ export default function MenuItemPill({
       </button>
 
       {isSelected && (
-        <div className="inline-flex items-center border border-ketchup border-l-0 rounded-r-full overflow-hidden">
+        <div className="inline-flex items-center h-full border border-ketchup border-l-0 rounded-r-full overflow-hidden">
           <button
             type="button"
             onClick={onDecrement}
             aria-label={`Decrease ${item.name} quantity, currently ${quantity}`}
-            className="w-11 min-h-[44px] flex items-center justify-center bg-ketchup text-ticket text-[18px] font-semibold hover:bg-ketchup/90 transition-colors"
+            className="w-9 h-full flex items-center justify-center bg-ketchup text-ticket text-[16px] font-semibold hover:bg-ketchup/90 transition-colors"
           >
             -
           </button>
           <span
-            className="w-8 min-h-[44px] flex items-center justify-center bg-ketchup text-ticket font-[family-name:var(--font-mono)] text-[12px]"
+            className="w-7 h-full flex items-center justify-center bg-ketchup text-ticket font-[family-name:var(--font-mono)] text-[12px]"
             aria-live="polite"
             aria-label={`${item.name} quantity: ${quantity}`}
           >
@@ -67,7 +67,7 @@ export default function MenuItemPill({
             type="button"
             onClick={onIncrement}
             aria-label={`Increase ${item.name} quantity, currently ${quantity}`}
-            className="w-11 min-h-[44px] flex items-center justify-center bg-ketchup text-ticket text-[18px] font-semibold hover:bg-ketchup/90 transition-colors"
+            className="w-9 h-full flex items-center justify-center bg-ketchup text-ticket text-[16px] font-semibold hover:bg-ketchup/90 transition-colors"
           >
             +
           </button>

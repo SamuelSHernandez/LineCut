@@ -82,7 +82,7 @@ export async function placeOrder(input: PlaceOrderInput) {
     .from("orders")
     .select("id", { count: "exact", head: true })
     .eq("seller_id", input.sellerId)
-    .in("status", ["pending", "accepted", "in_progress", "ready"]);
+    .in("status", ["pending", "accepted", "in-progress", "ready"]);
 
   if (activeOrderCount !== null && activeOrderCount >= maxConcurrent) {
     return { error: "This seller is at capacity. Try again later." };
@@ -110,14 +110,19 @@ export async function placeOrder(input: PlaceOrderInput) {
     .single();
 
   if (insertErr || !order) {
+    console.error("[placeOrder] insert failed:", insertErr?.message ?? "no data returned (RLS denial?)", { buyerId: user.id, sellerId: input.sellerId });
     return { error: "Failed to create order. Please try again." };
   }
 
-  // Create PaymentIntent
-  let clientSecret: string;
+  // Create PaymentIntent (auto-confirms if buyer has a saved card)
+  let clientSecret: string | null = null;
+  let savedCardUsed = false;
   try {
-    const paymentIntent = await createOrderPaymentIntent(order.id);
-    clientSecret = paymentIntent.client_secret!;
+    const result = await createOrderPaymentIntent(order.id);
+    savedCardUsed = result.savedCardUsed;
+    if (!savedCardUsed) {
+      clientSecret = result.client_secret!;
+    }
   } catch (err) {
     // Clean up the order if PI creation fails
     await supabase.from("orders").delete().eq("id", order.id);
@@ -152,7 +157,7 @@ export async function placeOrder(input: PlaceOrderInput) {
     item_count: input.items.reduce((sum, i) => sum + i.quantity, 0),
   });
 
-  return { success: true, orderId: order.id, clientSecret };
+  return { success: true, orderId: order.id, clientSecret, savedCardUsed };
 }
 
 // ── Order Modification ──────────────────────────────────────────────────────

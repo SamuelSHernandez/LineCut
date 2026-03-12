@@ -4,9 +4,10 @@ import { sendPush } from "@/lib/push";
 import { STALE_READY_THRESHOLD_MS, SYSTEM_ACTOR_ID } from "@/lib/constants";
 
 /**
- * Cron endpoint: handles stale ready-state orders.
- * - If one party confirmed and 20+ min elapsed: auto-complete.
- * - If neither party confirmed and 20+ min elapsed: send reminder pushes.
+ * Cron endpoint: safety net for stale ready-state orders.
+ * If an order has been ready for 20+ min, auto-cancel it (buyer no-show).
+ * Seller keeps payment — no refund issued.
+ * The primary timeout is client-side (per-seller configurable); this is the backstop.
  * Intended to run every 5 min via Vercel Cron.
  */
 export async function GET(req: NextRequest) {
@@ -21,7 +22,7 @@ export async function GET(req: NextRequest) {
 
   const { data: staleOrders, error } = await supabase
     .from("orders")
-    .select("id, buyer_id, seller_id, ready_at")
+    .select("id, buyer_id, seller_id, ready_at, total")
     .eq("status", "ready")
     .lt("ready_at", threshold);
 
@@ -34,88 +35,41 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ processed: 0 });
   }
 
-  let autoCompleted = 0;
-  let reminded = 0;
+  let cancelled = 0;
 
   for (const order of staleOrders) {
-    // Fresh check for confirmations at processing time to avoid TOCTOU race
-    const { data: confirmations } = await supabase
-      .from("handoff_confirmations")
-      .select("role")
-      .eq("order_id", order.id);
+    // Auto-cancel — buyer no-show. Seller keeps payment.
+    const { error: rpcErr } = await supabase.rpc("transition_order", {
+      p_order_id: order.id,
+      p_new_status: "cancelled",
+      p_actor_id: SYSTEM_ACTOR_ID,
+      p_metadata: { reason: "buyer_no_show", source: "cron_safety_net" },
+    });
 
-    const hasAny = (confirmations ?? []).length > 0;
-
-    if (hasAny) {
-      // At least one party confirmed — auto-complete
-      const { error: rpcErr } = await supabase.rpc("transition_order", {
-        p_order_id: order.id,
-        p_new_status: "completed",
-        p_actor_id: SYSTEM_ACTOR_ID,
-      });
-
-      // If system actor can't complete, use the confirmed party
-      if (rpcErr) {
-        const confirmedRole = (confirmations ?? [])[0]?.role;
-        const actorId = confirmedRole === "seller" ? order.seller_id : order.buyer_id;
-        await supabase.rpc("transition_order", {
-          p_order_id: order.id,
-          p_new_status: "completed",
-          p_actor_id: actorId,
-          p_metadata: { auto_completed: true, reason: "stale_ready_single_confirmation" },
-        });
-      }
-
-      // Partial refund for auto-completed orders (buyer no-show)
-      try {
-        const { refundPartialPlatformFee } = await import(
-          "@/lib/stripe/payment-intents"
-        );
-        await refundPartialPlatformFee(order.id);
-      } catch (err) {
-        console.error(
-          "[cron/stale-ready] Partial refund failed for",
-          order.id,
-          err
-        );
-      }
-
-      sendPush({
-        userId: order.buyer_id,
-        title: "Order complete",
-        body: "Your order was auto-completed.",
-        url: "/buyer",
-        orderId: order.id,
-      });
-      sendPush({
-        userId: order.seller_id,
-        title: "Order complete",
-        body: "Order was auto-completed.",
-        url: "/seller",
-        orderId: order.id,
-      });
-
-      autoCompleted++;
-    } else {
-      // Neither confirmed — send reminders
-      sendPush({
-        userId: order.buyer_id,
-        title: "Are you coming?",
-        body: "Your order has been ready for over 20 min.",
-        url: "/buyer",
-        orderId: order.id,
-      });
-      sendPush({
-        userId: order.seller_id,
-        title: "Buyer didn't show",
-        body: "You can complete or cancel the order.",
-        url: "/seller",
-        orderId: order.id,
-      });
-
-      reminded++;
+    if (rpcErr) {
+      console.error("[cron/stale-ready] transition failed for", order.id, rpcErr.message);
+      continue;
     }
+
+    const totalStr = order.total ? `$${(order.total / 100).toFixed(2)}` : "";
+
+    sendPush({
+      userId: order.buyer_id,
+      title: "Order cancelled — no pickup",
+      body: `You didn't pick up in time.${totalStr ? ` You were charged ${totalStr}.` : ""}`,
+      url: "/buyer",
+      orderId: order.id,
+    });
+    sendPush({
+      userId: order.seller_id,
+      title: "Buyer didn't show",
+      body: "Order cancelled — buyer didn't show. You keep the payment.",
+      url: "/seller",
+      orderId: order.id,
+    });
+
+    cancelled++;
   }
 
-  return NextResponse.json({ processed: staleOrders.length, autoCompleted, reminded });
+  return NextResponse.json({ processed: staleOrders.length, cancelled });
 }

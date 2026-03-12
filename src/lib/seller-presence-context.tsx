@@ -30,6 +30,11 @@ interface SellerPresenceContextValue {
    * default to sensible placeholders until we extend the schema.
    */
   getLiveSellersForRestaurant: (restaurantId: string) => Seller[];
+  /**
+   * Register a restaurant for real-time updates. Call this from a useEffect
+   * in the consuming component — NOT during render.
+   */
+  watchRestaurant: (restaurantId: string) => void;
 }
 
 const SellerPresenceContext =
@@ -134,10 +139,13 @@ interface SellerPresenceProviderProps {
  * subscription is set up dynamically.
  */
 export function SellerPresenceProvider({ children }: SellerPresenceProviderProps) {
-  // Map from sellerId -> { session, displayName, trustScore, avgRating, ratingCount, maxOrderCap, kycVerified }
+  // Map from sellerId -> { session, displayName, trustScore, avgRating, ratingCount, maxOrderCap, kycVerified, maxConcurrentOrders }
   const [liveMap, setLiveMap] = useState<
-    Map<string, { session: SellerSession; displayName: string; trustScore: number; avgRating: number | null; ratingCount: number; maxOrderCap: number; kycVerified: boolean }>
+    Map<string, { session: SellerSession; displayName: string; trustScore: number; avgRating: number | null; ratingCount: number; maxOrderCap: number; kycVerified: boolean; maxConcurrentOrders: number }>
   >(new Map());
+
+  // Map from sellerId -> count of active (non-terminal) orders
+  const [orderCounts, setOrderCounts] = useState<Map<string, number>>(new Map());
 
   // The currently watched restaurant (set by whichever detail page is mounted)
   const [watchedRestaurantId, setWatchedRestaurantId] = useState<string | null>(null);
@@ -183,7 +191,7 @@ export function SellerPresenceProvider({ children }: SellerPresenceProviderProps
 
       const nextMap = new Map<
         string,
-        { session: SellerSession; displayName: string; trustScore: number; avgRating: number | null; ratingCount: number; maxOrderCap: number; kycVerified: boolean }
+        { session: SellerSession; displayName: string; trustScore: number; avgRating: number | null; ratingCount: number; maxOrderCap: number; kycVerified: boolean; maxConcurrentOrders: number }
       >();
 
       for (const row of (data as unknown as SellerSessionRow[])) {
@@ -198,11 +206,30 @@ export function SellerPresenceProvider({ children }: SellerPresenceProviderProps
         const ratingCount = p?.rating_count ?? 0;
         const maxOrderCap = p?.max_order_cap ?? 5000;
         const kycVerified = p?.kyc_status === "approved";
-        nextMap.set(session.sellerId, { session, displayName, trustScore, avgRating, ratingCount, maxOrderCap, kycVerified });
+        const maxConcurrentOrders = p?.max_concurrent_orders ?? 3;
+        nextMap.set(session.sellerId, { session, displayName, trustScore, avgRating, ratingCount, maxOrderCap, kycVerified, maxConcurrentOrders });
+      }
+
+      // Fetch active order counts for all live sellers
+      const sellerIds = Array.from(nextMap.keys());
+      const countsMap = new Map<string, number>();
+      if (sellerIds.length > 0) {
+        const { data: orderData } = await supabase
+          .from("orders")
+          .select("seller_id")
+          .in("seller_id", sellerIds)
+          .in("status", ["pending", "accepted", "in-progress", "ready"]);
+
+        if (orderData) {
+          for (const row of orderData) {
+            countsMap.set(row.seller_id, (countsMap.get(row.seller_id) ?? 0) + 1);
+          }
+        }
       }
 
       setTimeout(() => {
         setLiveMap(nextMap);
+        setOrderCounts(countsMap);
       }, 0);
     }
 
@@ -216,7 +243,7 @@ export function SellerPresenceProvider({ children }: SellerPresenceProviderProps
     const supabase = createClient();
     supabase
       .from("profiles")
-      .select("display_name, trust_score, avg_rating, rating_count, max_order_cap, kyc_status")
+      .select("display_name, trust_score, avg_rating, rating_count, max_order_cap, kyc_status, max_concurrent_orders")
       .eq("id", session.sellerId)
       .single()
       .then(({ data }) => {
@@ -226,10 +253,11 @@ export function SellerPresenceProvider({ children }: SellerPresenceProviderProps
         const ratingCount = data?.rating_count ?? 0;
         const maxOrderCap = data?.max_order_cap ?? 5000;
         const kycVerified = data?.kyc_status === "approved";
+        const maxConcurrentOrders = data?.max_concurrent_orders ?? 3;
         setTimeout(() => {
           setLiveMap((prev) => {
             const next = new Map(prev);
-            next.set(session.sellerId, { session, displayName, trustScore, avgRating, ratingCount, maxOrderCap, kycVerified });
+            next.set(session.sellerId, { session, displayName, trustScore, avgRating, ratingCount, maxOrderCap, kycVerified, maxConcurrentOrders });
             return next;
           });
         }, 0);
@@ -290,17 +318,24 @@ export function SellerPresenceProvider({ children }: SellerPresenceProviderProps
     [liveMap]
   );
 
+  const watchRestaurant = useCallback(
+    (restaurantId: string) => {
+      setWatchedRestaurantId(restaurantId);
+    },
+    []
+  );
+
   const getLiveSellersForRestaurant = useCallback(
     (restaurantId: string): Seller[] => {
-      // Register this restaurant as the one we want real-time updates for.
-      // This is a side-effect-in-callback pattern; it's safe because React
-      // state updates are batched and setWatchedRestaurantId is idempotent.
-      setWatchedRestaurantId(restaurantId);
-
       const live = Array.from(liveMap.values())
         .filter((e) => e.session.restaurantId === restaurantId)
         // Filter out blocked users (bidirectional)
         .filter((e) => !blockedUserIds.has(e.session.sellerId))
+        // Filter out sellers at capacity
+        .filter((e) => {
+          const activeCount = orderCounts.get(e.session.sellerId) ?? 0;
+          return activeCount < e.maxConcurrentOrders;
+        })
         .map((e) => sessionToSeller(e.session, e.displayName, e.trustScore, e.avgRating, e.ratingCount, e.maxOrderCap, e.kycVerified));
 
       if (live.length > 0) return live;
@@ -308,12 +343,12 @@ export function SellerPresenceProvider({ children }: SellerPresenceProviderProps
       // Fallback to hardcoded demo data when no live sellers
       return getSellersByRestaurant(restaurantId);
     },
-    [liveMap, blockedUserIds]
+    [liveMap, blockedUserIds, orderCounts]
   );
 
   const value = useMemo(
-    () => ({ liveSessions, getLiveSellersForRestaurant }),
-    [liveSessions, getLiveSellersForRestaurant]
+    () => ({ liveSessions, getLiveSellersForRestaurant, watchRestaurant }),
+    [liveSessions, getLiveSellersForRestaurant, watchRestaurant]
   );
 
   return (
