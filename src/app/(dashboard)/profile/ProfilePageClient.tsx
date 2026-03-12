@@ -8,6 +8,7 @@ import BuyerBillingSection from "@/components/profile/BuyerBillingSection";
 import SellerPayoutSection from "@/components/profile/SellerPayoutSection";
 import BillingGateBanner from "@/components/profile/BillingGateBanner";
 import KycVerificationSection from "@/components/profile/KycVerificationSection";
+import AppearanceSection from "@/components/profile/AppearanceSection";
 import { useProfile } from "@/lib/profile-context";
 
 interface ProfilePageClientProps {
@@ -27,6 +28,7 @@ export default function ProfilePageClient({ gate }: ProfilePageClientProps) {
         <KycVerificationSection kycStatus={profile.kycStatus} />
       )}
       <SellerPreferencesSection />
+      <AppearanceSection />
       <BuyerBillingSection />
       <SellerPayoutSection />
     </div>

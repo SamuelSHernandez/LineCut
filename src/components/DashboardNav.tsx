@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import Logo from "@/components/Logo";
 import { useProfile } from "@/lib/profile-context";
 import { logout } from "@/app/auth/actions";
-import ThemeToggle from "@/components/shared/ThemeToggle";
 import Avatar from "@/components/shared/Avatar";
 
 export default function DashboardNav() {
@@ -92,7 +91,6 @@ export default function DashboardNav() {
         >
           Safety
         </Link>
-        <ThemeToggle />
         <Link
           href="/profile"
           className="flex items-center gap-3 hover:opacity-80 transition-opacity"
