@@ -6,6 +6,7 @@ import { useProfile } from "@/lib/profile-context";
 import { getStripe } from "@/lib/stripe-client";
 import {
   createSetupIntent,
+  syncPaymentMethod,
   detachPaymentMethod,
 } from "@/app/(dashboard)/profile/actions";
 
@@ -49,10 +50,17 @@ function CardForm() {
       return;
     }
 
+    // Sync the saved card details directly from Stripe
+    const syncResult = await syncPaymentMethod();
+    if ("error" in syncResult && syncResult.error) {
+      setError(syncResult.error);
+      setSaving(false);
+      return;
+    }
+
     setSuccess(true);
     setSaving(false);
-    // Give webhook time to update the profile before reloading
-    setTimeout(() => window.location.reload(), 4000);
+    setTimeout(() => window.location.reload(), 1000);
   }
 
   if (success) {

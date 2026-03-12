@@ -149,6 +149,44 @@ export async function createSetupIntent() {
   return { clientSecret: setupIntent.client_secret };
 }
 
+export async function syncPaymentMethod() {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("stripe_customer_id")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile?.stripe_customer_id) {
+    return { error: "No Stripe customer found." };
+  }
+
+  const paymentMethods = await stripe.paymentMethods.list({
+    customer: profile.stripe_customer_id,
+    type: "card",
+    limit: 1,
+  });
+
+  const pm = paymentMethods.data[0];
+  if (!pm?.card) {
+    return { error: "No card found on Stripe customer." };
+  }
+
+  await supabase
+    .from("profiles")
+    .update({
+      payment_method_last4: pm.card.last4,
+      payment_method_brand: pm.card.brand,
+      payment_method_exp_month: pm.card.exp_month,
+      payment_method_exp_year: pm.card.exp_year,
+    })
+    .eq("id", user.id);
+
+  revalidatePath("/profile", "layout");
+  return { success: true };
+}
+
 export async function detachPaymentMethod() {
   const { supabase, user } = await getAuthenticatedUser();
 
