@@ -18,6 +18,7 @@ import { READY_TIMEOUT_MS, READY_REMINDER_MS } from "@/lib/orders/state-machine"
 interface OrderTrackerProps {
   order: Order;
   onCancel: () => void;
+  onModify?: () => void;
 }
 
 interface Step {
@@ -45,7 +46,10 @@ const STEPS: Step[] = [
   {
     key: "ready",
     label: "READY FOR PICKUP",
-    description: (o) => `Your food is ready. Head to ${o.restaurantName}.`,
+    description: (o) => {
+      const base = `Your food is ready. Head to ${o.restaurantName}.`;
+      return o.pickupInstructions ? `${base} ${o.pickupInstructions}` : base;
+    },
   },
   {
     key: "completed",
@@ -59,7 +63,7 @@ function getStepIndex(status: OrderStatus): number {
   return idx >= 0 ? idx : 0;
 }
 
-export default function OrderTracker({ order, onCancel }: OrderTrackerProps) {
+export default function OrderTracker({ order, onCancel, onModify }: OrderTrackerProps) {
   const profile = useProfile();
   const userId = profile.id;
   const currentIndex = getStepIndex(order.status);
@@ -218,6 +222,11 @@ export default function OrderTracker({ order, onCancel }: OrderTrackerProps) {
           <p className="font-[family-name:var(--font-body)] text-[14px] text-ticket/60">
             Pick up from {order.sellerName}
           </p>
+          {order.pickupInstructions && (
+            <p className="font-[family-name:var(--font-body)] text-[14px] text-ticket/80 mt-3">
+              {order.pickupInstructions}
+            </p>
+          )}
           <p className="font-[family-name:var(--font-mono)] text-[11px] text-ticket/40 mt-8">
             Tap anywhere to dismiss
           </p>
@@ -238,7 +247,7 @@ export default function OrderTracker({ order, onCancel }: OrderTrackerProps) {
       {/* Vertical stepper */}
       <div className="relative pl-8" role="list" aria-label="Order progress">
         <div
-          className="absolute left-[11px] top-3 bottom-3 w-[2px] bg-[#ddd4c4]"
+          className="absolute left-[11px] top-3 bottom-3 w-[2px] bg-divider"
           aria-hidden="true"
         />
 
@@ -258,13 +267,13 @@ export default function OrderTracker({ order, onCancel }: OrderTrackerProps) {
                   isCompleted
                     ? "bg-sidewalk border-sidewalk"
                     : isCurrent
-                      ? "bg-ketchup border-ketchup"
-                      : "bg-butcher-paper border-[#ddd4c4]"
+                      ? "bg-ketchup border-ketchup animate-status-pulse"
+                      : "bg-butcher-paper border-divider"
                 }`}
                 aria-hidden="true"
               >
                 {isCompleted && (
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="animate-checkmark-draw">
                     <path d="M2.5 6L5 8.5L9.5 3.5" stroke="#FFFDF5" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 )}
@@ -273,7 +282,7 @@ export default function OrderTracker({ order, onCancel }: OrderTrackerProps) {
                 )}
               </div>
 
-              <div>
+              <div className={isCurrent ? "animate-slide-in-right" : ""}>
                 <p
                   className={`font-[family-name:var(--font-display)] text-[16px] tracking-[1px] ${
                     isCompleted
@@ -417,6 +426,33 @@ export default function OrderTracker({ order, onCancel }: OrderTrackerProps) {
         <h4 className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[2px] text-sidewalk mb-2">
           ORDER SUMMARY
         </h4>
+
+        {/* Order ID and timestamp for completed orders */}
+        {order.status === "completed" && (
+          <div className="mb-3 space-y-1">
+            <p className="font-[family-name:var(--font-mono)] text-[11px] tracking-[1px] text-sidewalk">
+              Order #{order.id.slice(0, 8).toUpperCase()}
+            </p>
+            <p className="font-[family-name:var(--font-mono)] text-[11px] tracking-[1px] text-sidewalk">
+              {new Date(order.statusUpdatedAt).toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}{" "}
+              at{" "}
+              {new Date(order.statusUpdatedAt).toLocaleTimeString(undefined, {
+                hour: "numeric",
+                minute: "2-digit",
+              })}
+            </p>
+            {restaurant && (
+              <p className="font-[family-name:var(--font-body)] text-[12px] text-sidewalk">
+                {restaurant.name} &middot; {restaurant.address}
+              </p>
+            )}
+          </div>
+        )}
+
         <ul className="space-y-1.5 list-none p-0 m-0" aria-label="Order items">
           {order.items.map((item) => (
             <li key={item.menuItemId} className="flex items-center justify-between">
@@ -432,18 +468,59 @@ export default function OrderTracker({ order, onCancel }: OrderTrackerProps) {
 
         <div className="border-t border-dashed border-[#ddd4c4] my-3" />
 
-        <div className="flex items-center justify-between">
-          <span className="font-[family-name:var(--font-display)] text-[16px] tracking-[1px] text-chalkboard">
-            TOTAL
-          </span>
-          <span className="font-[family-name:var(--font-display)] text-[18px] tracking-[1px] text-ketchup">
-            ${order.total.toFixed(2)}
-          </span>
-        </div>
+        {/* Fee breakdown for completed orders */}
+        {order.status === "completed" ? (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="font-[family-name:var(--font-body)] text-[13px] text-sidewalk">
+                Subtotal
+              </span>
+              <span className="font-[family-name:var(--font-mono)] text-[12px] text-sidewalk">
+                ${order.itemsSubtotal.toFixed(2)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="font-[family-name:var(--font-body)] text-[13px] text-sidewalk">
+                Seller fee
+              </span>
+              <span className="font-[family-name:var(--font-mono)] text-[12px] text-sidewalk">
+                ${order.sellerFee.toFixed(2)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="font-[family-name:var(--font-body)] text-[13px] text-sidewalk">
+                Platform fee
+              </span>
+              <span className="font-[family-name:var(--font-mono)] text-[12px] text-sidewalk">
+                ${order.platformFee.toFixed(2)}
+              </span>
+            </div>
+            <div className="border-t border-dashed border-[#ddd4c4] my-2" />
+            <div className="flex items-center justify-between">
+              <span className="font-[family-name:var(--font-display)] text-[16px] tracking-[1px] text-chalkboard">
+                TOTAL
+              </span>
+              <span className="font-[family-name:var(--font-display)] text-[18px] tracking-[1px] text-ketchup">
+                ${order.total.toFixed(2)}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between">
+              <span className="font-[family-name:var(--font-display)] text-[16px] tracking-[1px] text-chalkboard">
+                TOTAL
+              </span>
+              <span className="font-[family-name:var(--font-display)] text-[18px] tracking-[1px] text-ketchup">
+                ${order.total.toFixed(2)}
+              </span>
+            </div>
 
-        <p className="font-[family-name:var(--font-mono)] text-[11px] text-sidewalk mt-1">
-          {totalItems} {totalItems === 1 ? "item" : "items"} through {order.sellerName}
-        </p>
+            <p className="font-[family-name:var(--font-mono)] text-[11px] text-sidewalk mt-1">
+              {totalItems} {totalItems === 1 ? "item" : "items"} through {order.sellerName}
+            </p>
+          </>
+        )}
       </div>
 
       {/* Chat panel — active orders */}
@@ -492,10 +569,19 @@ export default function OrderTracker({ order, onCancel }: OrderTrackerProps) {
         </>
       )}
 
-      {/* Cancel button — only while pending */}
+      {/* Modify + Cancel buttons — only while pending */}
       {order.status === "pending" && (
         <>
-          <div className="border-t border-dashed border-[#ddd4c4]" />
+          <div className="border-t border-dashed border-divider" />
+          {onModify && (
+            <button
+              type="button"
+              onClick={onModify}
+              className="w-full min-h-[48px] py-3 px-6 bg-ticket border border-mustard text-chalkboard font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] transition-colors hover:bg-mustard hover:text-chalkboard focus:outline-none focus:ring-2 focus:ring-mustard/50"
+            >
+              MODIFY ORDER
+            </button>
+          )}
           <button
             type="button"
             onClick={onCancel}

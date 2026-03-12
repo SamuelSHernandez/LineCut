@@ -1,7 +1,7 @@
 "use server";
 
 import { createOrderPaymentIntent } from "@/lib/stripe/payment-intents";
-import { sendPush } from "@/lib/push";
+import { sendNotification } from "@/lib/notify";
 import { trackEvent, EVENTS } from "@/lib/analytics";
 import { isBlocked } from "@/lib/blocked-users";
 import { getAuthenticatedUser } from "@/lib/auth";
@@ -59,7 +59,7 @@ export async function placeOrder(input: PlaceOrderInput) {
   // Verify seller has an active session at this restaurant
   const { data: sellerSession } = await supabase
     .from("seller_sessions")
-    .select("id")
+    .select("id, pickup_instructions")
     .eq("seller_id", input.sellerId)
     .eq("restaurant_id", input.restaurantId)
     .eq("status", "active")
@@ -67,6 +67,25 @@ export async function placeOrder(input: PlaceOrderInput) {
 
   if (!sellerSession) {
     return { error: "This seller is no longer in line." };
+  }
+
+  // Check seller's concurrent order limit
+  const { data: sellerConcurrency } = await supabase
+    .from("profiles")
+    .select("max_concurrent_orders")
+    .eq("id", input.sellerId)
+    .single();
+
+  const maxConcurrent = sellerConcurrency?.max_concurrent_orders ?? 3;
+
+  const { count: activeOrderCount } = await supabase
+    .from("orders")
+    .select("id", { count: "exact", head: true })
+    .eq("seller_id", input.sellerId)
+    .in("status", ["pending", "accepted", "in_progress", "ready"]);
+
+  if (activeOrderCount !== null && activeOrderCount >= maxConcurrent) {
+    return { error: "This seller is at capacity. Try again later." };
   }
 
   // Insert order
@@ -83,6 +102,9 @@ export async function placeOrder(input: PlaceOrderInput) {
       platform_fee: platformFeeCents,
       total: totalCents,
       status: "pending",
+      ...(sellerSession.pickup_instructions && {
+        pickup_instructions: sellerSession.pickup_instructions,
+      }),
     })
     .select("id")
     .single();
@@ -114,12 +136,13 @@ export async function placeOrder(input: PlaceOrderInput) {
     : "Someone";
   const itemCount = input.items.reduce((sum, i) => sum + i.quantity, 0);
 
-  sendPush({
+  sendNotification({
     userId: input.sellerId,
     title: "New order",
     body: `${buyerName} wants ${itemCount} item${itemCount !== 1 ? "s" : ""}`,
     url: `/seller`,
     orderId: order.id,
+    smsBody: `LineCut: ${buyerName} wants ${itemCount} item${itemCount !== 1 ? "s" : ""} from you.`,
   });
 
   trackEvent(EVENTS.ORDER_PLACED, user.id, {
@@ -130,4 +153,98 @@ export async function placeOrder(input: PlaceOrderInput) {
   });
 
   return { success: true, orderId: order.id, clientSecret };
+}
+
+// ── Order Modification ──────────────────────────────────────────────────────
+
+interface ModifyOrderInput {
+  orderId: string;
+  items: { menuItemId: string; name: string; price: number; quantity: number }[];
+  specialInstructions: string;
+  sellerFee: number;
+}
+
+export async function modifyOrder(input: ModifyOrderInput) {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  // Fetch order and verify ownership + status
+  const { data: order, error: fetchErr } = await supabase
+    .from("orders")
+    .select("id, buyer_id, status, stripe_payment_intent_id, seller_id")
+    .eq("id", input.orderId)
+    .single();
+
+  if (fetchErr || !order) {
+    return { error: "Order not found." };
+  }
+
+  if (order.buyer_id !== user.id) {
+    return { error: "You can only modify your own orders." };
+  }
+
+  if (order.status !== "pending") {
+    return { error: "Order can only be modified while pending." };
+  }
+
+  // Recalculate fees
+  const itemsSubtotal = input.items.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
+  const platformFee = calculatePlatformFeeDollars(itemsSubtotal);
+  const total = itemsSubtotal + input.sellerFee + platformFee;
+
+  const itemsSubtotalCents = Math.round(itemsSubtotal * 100);
+  const sellerFeeCents = Math.round(input.sellerFee * 100);
+  const platformFeeCents = Math.round(platformFee * 100);
+  const totalCents = Math.round(total * 100);
+
+  if (totalCents > ORDER_MAX_CENTS) {
+    return { error: "Order exceeds $200 maximum." };
+  }
+
+  // Enforce seller's personal max order cap
+  const { data: sellerProfile } = await supabase
+    .from("profiles")
+    .select("max_order_cap")
+    .eq("id", order.seller_id)
+    .single();
+
+  if (sellerProfile && totalCents > sellerProfile.max_order_cap) {
+    const capDollars = (sellerProfile.max_order_cap / 100).toFixed(0);
+    return { error: `Order exceeds this seller's max of $${capDollars}.` };
+  }
+
+  // Update Stripe PaymentIntent amount if changed
+  if (order.stripe_payment_intent_id) {
+    try {
+      const { getStripe } = await import("@/lib/stripe");
+      const stripe = getStripe();
+      await stripe.paymentIntents.update(order.stripe_payment_intent_id, {
+        amount: totalCents,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Payment update failed";
+      return { error: message };
+    }
+  }
+
+  // Update order in DB
+  const { error: updateErr } = await supabase
+    .from("orders")
+    .update({
+      items: input.items,
+      special_instructions: input.specialInstructions,
+      items_subtotal: itemsSubtotalCents,
+      seller_fee: sellerFeeCents,
+      platform_fee: platformFeeCents,
+      total: totalCents,
+    })
+    .eq("id", input.orderId);
+
+  if (updateErr) {
+    return { error: "Failed to update order." };
+  }
+
+  return { success: true, total, itemsSubtotal, platformFee };
 }

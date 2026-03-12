@@ -10,6 +10,7 @@ interface OrderConfirmationProps {
   sellerMaxCap?: number; // cents
   onConfirm: () => void;
   disabled: boolean;
+  confirmLabel?: string;
 }
 
 const ORDER_MAX = 200;
@@ -21,6 +22,7 @@ export default function OrderConfirmation({
   sellerMaxCap,
   onConfirm,
   disabled,
+  confirmLabel,
 }: OrderConfirmationProps) {
   const itemsSubtotal = items.reduce(
     (sum, item) => sum + item.price * item.quantity,
@@ -110,7 +112,7 @@ export default function OrderConfirmation({
         disabled={disabled || overCap}
         className="w-full min-h-[48px] py-3 px-6 bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] transition-all duration-200 hover:bg-ketchup/90 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-ketchup/50"
       >
-        PLACE ORDER &mdash; ${total.toFixed(2)}
+        {confirmLabel ?? "PLACE ORDER"} &mdash; ${total.toFixed(2)}
       </button>
 
       {/* Caption */}

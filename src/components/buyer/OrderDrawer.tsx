@@ -6,7 +6,7 @@ import type { Seller, MenuItem, OrderItem, Order } from "@/lib/types";
 import { useProfile } from "@/lib/profile-context";
 import { useOrders } from "@/lib/order-context";
 import { checkBillingReady } from "@/lib/billing-gate";
-import { placeOrder } from "@/app/(dashboard)/buyer/actions";
+import { placeOrder, modifyOrder as modifyOrderAction } from "@/app/(dashboard)/buyer/actions";
 import { calculatePlatformFeeDollars } from "@/lib/fee-tiers";
 import MenuItemPill from "./MenuItemPill";
 import OrderConfirmation from "./OrderConfirmation";
@@ -20,6 +20,8 @@ interface OrderDrawerProps {
   restaurantName: string;
   menuItems: MenuItem[];
   onClose: () => void;
+  /** When set, drawer opens in edit mode for an existing pending order */
+  editOrder?: Order;
 }
 
 export default function OrderDrawer({
@@ -27,11 +29,21 @@ export default function OrderDrawer({
   restaurantName,
   menuItems,
   onClose,
+  editOrder,
 }: OrderDrawerProps) {
-  const [orderItems, setOrderItems] = useState<Map<string, OrderItem>>(
-    new Map()
+  const [orderItems, setOrderItems] = useState<Map<string, OrderItem>>(() => {
+    if (editOrder) {
+      const map = new Map<string, OrderItem>();
+      for (const item of editOrder.items) {
+        map.set(item.menuItemId, item);
+      }
+      return map;
+    }
+    return new Map();
+  });
+  const [specialInstructions, setSpecialInstructions] = useState(
+    editOrder?.specialInstructions ?? ""
   );
-  const [specialInstructions, setSpecialInstructions] = useState("");
   const [step, setStep] = useState<DrawerStep>("build");
   const [showMore, setShowMore] = useState(false);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -42,7 +54,7 @@ export default function OrderDrawer({
   const drawerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const profile = useProfile();
-  const { placeOrder: placeOrderContext, cancelOrder, orders } = useOrders();
+  const { placeOrder: placeOrderContext, cancelOrder, modifyOrder: modifyOrderContext, orders } = useOrders();
   const router = useRouter();
 
   const popularItems = menuItems.filter((m) => m.popular);
@@ -178,6 +190,42 @@ export default function OrderDrawer({
     }
   }
 
+  async function handleModify() {
+    if (!editOrder) return;
+    setPlacing(true);
+    setError(null);
+
+    const result = await modifyOrderAction({
+      orderId: editOrder.id,
+      items: orderItemsArray.map((item) => ({
+        menuItemId: item.menuItemId,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+      })),
+      specialInstructions,
+      sellerFee: seller.fee,
+    });
+
+    setPlacing(false);
+
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+
+    // Optimistic update
+    modifyOrderContext(editOrder.id, {
+      items: orderItemsArray,
+      specialInstructions,
+      itemsSubtotal: result.itemsSubtotal ?? itemsSubtotal,
+      platformFee: result.platformFee ?? platformFee,
+      total: result.total ?? total,
+    });
+
+    onClose();
+  }
+
   function handlePaymentSuccess() {
     // Build full Order object and publish via context/bus
     const now = new Date().toISOString();
@@ -251,7 +299,9 @@ export default function OrderDrawer({
                   ? "PAYMENT"
                   : step === "tracking"
                     ? "ORDER TRACKER"
-                    : "YOUR ORDER"}
+                    : editOrder
+                      ? "MODIFY ORDER"
+                      : "YOUR ORDER"}
               </h3>
               <p className="font-[family-name:var(--font-body)] text-[13px] text-sidewalk">
                 Through {seller.firstName} at {restaurantName}
@@ -390,8 +440,9 @@ export default function OrderDrawer({
                   sellerName={seller.firstName}
                   sellerFee={seller.fee}
                   sellerMaxCap={seller.maxOrderCap}
-                  onConfirm={handleConfirm}
+                  onConfirm={editOrder ? handleModify : handleConfirm}
                   disabled={placing}
+                  confirmLabel={editOrder ? "UPDATE ORDER" : undefined}
                 />
               ) : (
                 <p className="font-[family-name:var(--font-body)] text-[13px] text-sidewalk text-center py-4">

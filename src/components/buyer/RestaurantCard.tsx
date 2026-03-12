@@ -1,27 +1,56 @@
 import Link from "next/link";
+import Image from "next/image";
 import type { Restaurant, WaitTimeStats } from "@/lib/types";
 
 interface RestaurantCardProps {
   restaurant: Restaurant;
   distance: string | null;
   waitStats?: WaitTimeStats;
+  openStatus?: boolean | null;
 }
 
 export default function RestaurantCard({
   restaurant,
   distance,
   waitStats,
+  openStatus,
 }: RestaurantCardProps) {
   return (
     <Link
       href={`/buyer/restaurant/${restaurant.id}`}
-      className="block w-full text-left bg-ticket rounded-[10px] p-5 shadow-[0_4px_20px_rgba(0,0,0,0.06)] border border-[#eee6d8] transition-all duration-200 hover:shadow-[0_8px_32px_rgba(0,0,0,0.1)] hover:scale-[1.01]"
+      className="block w-full text-left bg-ticket rounded-[10px] shadow-[0_4px_20px_rgba(0,0,0,0.06)] border border-[#eee6d8] transition-all duration-200 hover:shadow-[0_8px_32px_rgba(0,0,0,0.1)] hover:scale-[1.01] overflow-hidden"
     >
+      {/* Restaurant image or colored strip */}
+      {restaurant.imageUrl ? (
+        <div className="relative w-full h-32">
+          <Image
+            src={restaurant.imageUrl}
+            alt={restaurant.name}
+            fill
+            className="object-cover"
+            loading="lazy"
+            sizes="(max-width: 768px) 100vw, 55vw"
+          />
+        </div>
+      ) : (
+        <div className="w-full h-2 bg-mustard" />
+      )}
+
+      <div className="p-5">
       {/* Header */}
       <div className="flex items-start justify-between mb-1">
         <h3 className="font-[family-name:var(--font-display)] text-[18px] tracking-[1px] leading-tight">
           {restaurant.name}
         </h3>
+        {openStatus !== null && openStatus !== undefined && (
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-[family-name:var(--font-mono)] text-[10px] tracking-[0.5px] font-semibold ${
+            openStatus
+              ? "bg-[#DDEFDD] text-[#2D6A2D]"
+              : "bg-[#E8E8E8] text-[#4D4D4D]"
+          }`}>
+            {openStatus ? "OPEN" : "CLOSED"}
+          </span>
+        )}
       </div>
 
       {/* Address + Distance */}
@@ -76,6 +105,7 @@ export default function RestaurantCard({
             </p>
           )}
         </div>
+      </div>
       </div>
     </Link>
   );

@@ -2,6 +2,7 @@
 
 import type { Seller } from "@/lib/types";
 import StarRating from "@/components/shared/StarRating";
+import VerifiedBadge from "@/components/shared/VerifiedBadge";
 
 interface SellerCardProps {
   seller: Seller;
@@ -60,6 +61,7 @@ export default function SellerCard({
               <span className="font-[family-name:var(--font-body)] text-[15px] font-semibold text-chalkboard">
                 {seller.firstName} {seller.lastInitial}.
               </span>
+              {seller.kycVerified && <VerifiedBadge size="sm" />}
               {seller.avgRating !== null ? (
                 <span className="inline-flex items-center gap-1">
                   <StarRating value={Math.round(seller.avgRating)} size="sm" />

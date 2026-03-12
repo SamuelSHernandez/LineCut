@@ -12,11 +12,13 @@ const RestaurantMap = dynamic(() => import("./RestaurantMap"), { ssr: false });
 interface RestaurantBrowserProps {
   restaurants: Restaurant[];
   waitStats: Record<string, WaitTimeStats>;
+  openStatus?: Record<string, boolean | null>;
 }
 
 export default function RestaurantBrowser({
   restaurants,
   waitStats,
+  openStatus,
 }: RestaurantBrowserProps) {
   const router = useRouter();
   const [userLocation, setUserLocation] = useState<{
@@ -128,6 +130,7 @@ export default function RestaurantBrowser({
                 restaurant={r}
                 distance={getDistance(r)}
                 waitStats={waitStats[r.id]}
+                openStatus={openStatus?.[r.id]}
               />
             ))
           )}

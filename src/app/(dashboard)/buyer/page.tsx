@@ -3,8 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import RestaurantBrowser from "@/components/buyer/RestaurantBrowser";
 import BuyerOrdersSection from "@/components/buyer/BuyerOrdersSection";
+import PullToRefreshWrapper from "@/components/shared/PullToRefreshWrapper";
 import { fetchRestaurants } from "@/lib/restaurants";
 import { getWaitTimeStats } from "@/lib/wait-times";
+import { getOpenStatusMap } from "@/lib/google-places";
 
 export default async function BuyerDashboard() {
   const supabase = await createClient();
@@ -39,6 +41,8 @@ export default async function BuyerDashboard() {
     getWaitTimeStats(),
   ]);
 
+  const openStatus = await getOpenStatusMap(restaurantList);
+
   // Serialize waitStats map to plain object for client component
   const waitStatsObj: Record<
     string,
@@ -49,6 +53,7 @@ export default async function BuyerDashboard() {
   }
 
   return (
+    <PullToRefreshWrapper>
     <div className="space-y-8">
       {/* Welcome */}
       <div>
@@ -63,7 +68,7 @@ export default async function BuyerDashboard() {
       </div>
 
       {/* Restaurant Browser */}
-      <RestaurantBrowser restaurants={restaurantList} waitStats={waitStatsObj} />
+      <RestaurantBrowser restaurants={restaurantList} waitStats={waitStatsObj} openStatus={openStatus} />
 
       {/* Your Orders */}
       <div>
@@ -83,5 +88,6 @@ export default async function BuyerDashboard() {
         </Link>
       </div>
     </div>
+    </PullToRefreshWrapper>
   );
 }

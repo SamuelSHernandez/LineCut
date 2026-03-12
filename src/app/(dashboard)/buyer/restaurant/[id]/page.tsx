@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { restaurants } from "@/lib/restaurants";
 import { getSellersByRestaurant } from "@/lib/sellers";
 import { getMenuItemsByRestaurant } from "@/lib/menu-items";
@@ -62,7 +63,20 @@ export default async function RestaurantDetailPage({
       </Link>
 
       {/* Restaurant Header Card */}
-      <div className="bg-ticket rounded-[10px] border border-[#eee6d8] p-5 shadow-[0_4px_20px_rgba(0,0,0,0.06)]">
+      <div className="bg-ticket rounded-[10px] border border-[#eee6d8] shadow-[0_4px_20px_rgba(0,0,0,0.06)] overflow-hidden">
+        {restaurant.imageUrl && (
+          <div className="relative w-full h-48">
+            <Image
+              src={restaurant.imageUrl}
+              alt={restaurant.name}
+              fill
+              className="object-cover"
+              priority
+              sizes="(max-width: 768px) 100vw, 700px"
+            />
+          </div>
+        )}
+        <div className="p-5">
         <h1 className="font-[family-name:var(--font-display)] text-[32px] tracking-[2px] leading-none mb-1">
           {restaurant.name}
         </h1>
@@ -96,6 +110,7 @@ export default async function RestaurantDetailPage({
           <span className="font-[family-name:var(--font-mono)] text-[11px] tracking-[1px] text-sidewalk">
             {feeRange}
           </span>
+        </div>
         </div>
       </div>
 
