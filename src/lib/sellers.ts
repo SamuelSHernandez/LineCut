@@ -76,7 +76,7 @@ export const sellers: Seller[] = [
     pickupInstructions: "Look for me at the counter by the window",
   },
   {
-    id: "seller-test-1",
+    id: "00000000-0000-0000-0000-000000000001",
     restaurantId: "test",
     firstName: "Test",
     lastInitial: "S",
