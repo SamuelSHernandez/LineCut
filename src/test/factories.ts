@@ -149,6 +149,31 @@ export function createMockSeller(overrides?: Partial<Seller>): Seller {
   };
 }
 
+// ── Waitlist Entry ───────────────────────────────────────────
+
+export interface WaitlistEntry {
+  email: string;
+  referral_code: string;
+  referral_count: number;
+  credit_earned: boolean;
+  referred_by: string | null;
+  created_at: string;
+}
+
+export function createMockWaitlistEntry(
+  overrides?: Partial<WaitlistEntry>
+): WaitlistEntry {
+  return {
+    email: "waitlist@example.com",
+    referral_code: "abc12345",
+    referral_count: 0,
+    credit_earned: false,
+    referred_by: null,
+    created_at: "2026-03-10T12:00:00Z",
+    ...overrides,
+  };
+}
+
 // ── Chat Message ─────────────────────────────────────────────────
 
 export function createMockChatMessage(
