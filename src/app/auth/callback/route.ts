@@ -6,27 +6,40 @@ export async function GET(request: Request) {
   const code = searchParams.get("code");
   const next = searchParams.get("next");
 
-  if (code) {
-    const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+  try {
+    if (code) {
+      const supabase = await createClient();
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
 
-    if (!error) {
-      // If explicit next param, use it
-      if (next && next.startsWith("/")) {
-        return NextResponse.redirect(`${origin}${next}`);
+      if (!error) {
+        // If explicit next param, use it
+        if (next && next.startsWith("/") && !next.startsWith("//")) {
+          return NextResponse.redirect(`${origin}${next}`);
+        }
+
+        // Otherwise, route based on role
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+          return NextResponse.redirect(`${origin}/auth/login`);
+        }
+
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("is_buyer, is_seller")
+          .eq("id", user.id)
+          .single();
+
+        const destination = profile?.is_seller ? "/seller" : "/buyer";
+        return NextResponse.redirect(`${origin}${destination}`);
       }
-
-      // Otherwise, route based on role
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("is_buyer, is_seller")
-        .single();
-
-      const destination = profile?.is_seller ? "/seller" : "/buyer";
-      return NextResponse.redirect(`${origin}${destination}`);
     }
+  } catch (error) {
+    console.error("[Auth Callback] Failed:", error);
   }
 
   // Auth error — redirect to login with error hint
-  return NextResponse.redirect(`${origin}/auth/login`);
+  return NextResponse.redirect(`${origin}/auth/login?error=callback_failed`);
 }

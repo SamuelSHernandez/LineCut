@@ -92,19 +92,32 @@ export async function login(
   }
 
   // Redirect to the original destination, or role-based dashboard
-  if (next && next.startsWith("/")) {
+  if (next && next.startsWith("/") && !next.startsWith("//")) {
     redirect(next);
   }
 
   // Fetch profile to determine role-based redirect
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("is_buyer, is_seller")
-    .single();
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  // Default to seller (time-sensitive — already in line)
-  if (profile?.is_seller) {
-    redirect("/seller");
+    if (user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("is_buyer, is_seller")
+        .eq("id", user.id)
+        .single();
+
+      // Default to seller (time-sensitive — already in line)
+      if (profile?.is_seller) {
+        redirect("/seller");
+      }
+    }
+  } catch (e) {
+    // redirect() throws a special error — let it propagate
+    if (e && typeof e === "object" && "digest" in e && String((e as { digest: string }).digest).startsWith("NEXT_REDIRECT")) throw e;
+    console.error("[Login] Profile lookup failed:", e);
   }
   redirect("/buyer");
 }

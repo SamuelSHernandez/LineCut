@@ -11,14 +11,17 @@ const initialState: AuthState = { error: null };
 function LoginForm() {
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "";
+  const callbackError = searchParams.get("error");
   const [state, formAction, pending] = useActionState(login, initialState);
+
+  const displayError = state.error ?? (callbackError === "callback_failed" ? "Email confirmation failed. Please try logging in." : null);
 
   return (
     <>
-      {state.error && (
+      {displayError && (
         <div role="alert" className="bg-[#FFF3D6] border border-ketchup rounded-[6px] px-4 py-3 mb-6">
           <p className="font-[family-name:var(--font-body)] text-[13px] text-ketchup font-medium">
-            {state.error}
+            {displayError}
           </p>
         </div>
       )}
