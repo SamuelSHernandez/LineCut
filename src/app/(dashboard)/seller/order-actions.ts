@@ -356,6 +356,7 @@ export async function cancelAcceptedOrder(orderId: string): Promise<ActionResult
     .from("orders")
     .select("stripe_payment_intent_id, status, buyer_id")
     .eq("id", orderId)
+    .eq("seller_id", user.id)
     .single();
 
   if (!order) {

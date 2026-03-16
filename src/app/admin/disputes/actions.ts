@@ -1,28 +1,35 @@
-import { NextRequest, NextResponse } from "next/server";
+"use server";
+
 import { getAdminClient } from "@/lib/supabase/admin";
 import { sendPush } from "@/lib/push";
 import { refundFull } from "@/lib/stripe/payment-intents";
-import { verifySecret } from "@/lib/auth-utils";
 
-export async function POST(req: NextRequest) {
-  const secret = req.headers.get("authorization")?.replace("Bearer ", "");
-  if (!verifySecret(secret, process.env.ADMIN_SECRET)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+const VALID_RESOLUTIONS = [
+  "resolved_refund",
+  "resolved_no_action",
+  "resolved_warning",
+] as const;
+
+export async function resolveDispute({
+  disputeId,
+  resolution,
+  notes,
+}: {
+  disputeId: string;
+  resolution: string;
+  notes: string | null;
+}): Promise<{ ok: boolean; error?: string }> {
+  const secret = process.env.ADMIN_SECRET;
+  if (!secret) {
+    return { ok: false, error: "Server configuration error." };
   }
-
-  const { disputeId, resolution, notes } = await req.json();
 
   if (!disputeId || !resolution) {
-    return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+    return { ok: false, error: "Missing fields." };
   }
 
-  const validResolutions = [
-    "resolved_refund",
-    "resolved_no_action",
-    "resolved_warning",
-  ];
-  if (!validResolutions.includes(resolution)) {
-    return NextResponse.json({ error: "Invalid resolution" }, { status: 400 });
+  if (!VALID_RESOLUTIONS.includes(resolution as (typeof VALID_RESOLUTIONS)[number])) {
+    return { ok: false, error: "Invalid resolution." };
   }
 
   const supabase = getAdminClient();
@@ -35,14 +42,11 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (disputeErr || !dispute) {
-    return NextResponse.json({ error: "Dispute not found" }, { status: 404 });
+    return { ok: false, error: "Dispute not found." };
   }
 
   if (dispute.status !== "open" && dispute.status !== "under_review") {
-    return NextResponse.json(
-      { error: "Dispute already resolved" },
-      { status: 400 }
-    );
+    return { ok: false, error: "Dispute already resolved." };
   }
 
   // Update dispute
@@ -56,7 +60,7 @@ export async function POST(req: NextRequest) {
     .eq("id", disputeId);
 
   if (updateErr) {
-    return NextResponse.json({ error: updateErr.message }, { status: 500 });
+    return { ok: false, error: updateErr.message };
   }
 
   // If refund resolution, process refund
@@ -64,11 +68,10 @@ export async function POST(req: NextRequest) {
     try {
       await refundFull(dispute.order_id);
     } catch (err) {
-      console.error("[resolve-dispute] Refund failed:", err);
-      return NextResponse.json(
-        { error: "Dispute resolved but refund failed" },
-        { status: 500 }
-      );
+      if (process.env.NODE_ENV === "development") {
+        console.error("[resolve-dispute] Refund failed:", err);
+      }
+      return { ok: false, error: "Dispute resolved but refund failed." };
     }
   }
 
@@ -103,5 +106,5 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  return NextResponse.json({ ok: true, resolution });
+  return { ok: true };
 }

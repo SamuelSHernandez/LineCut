@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { sendPush } from "@/lib/push";
 import { STALE_READY_THRESHOLD_MS, SYSTEM_ACTOR_ID } from "@/lib/constants";
+import { verifySecret } from "@/lib/auth-utils";
 
 /**
  * Cron endpoint: safety net for stale ready-state orders.
@@ -12,7 +13,7 @@ import { STALE_READY_THRESHOLD_MS, SYSTEM_ACTOR_ID } from "@/lib/constants";
  */
 export async function GET(req: NextRequest) {
   const cronSecret = req.headers.get("authorization")?.replace("Bearer ", "");
-  if (cronSecret !== process.env.CRON_SECRET) {
+  if (!verifySecret(cronSecret, process.env.CRON_SECRET)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

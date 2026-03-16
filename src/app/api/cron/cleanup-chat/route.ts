@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { verifySecret } from "@/lib/auth-utils";
 
 /**
  * Cron endpoint: deletes chat messages for orders that completed/cancelled > 30 min ago.
@@ -7,7 +8,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
  */
 export async function GET(req: NextRequest) {
   const cronSecret = req.headers.get("authorization")?.replace("Bearer ", "");
-  if (cronSecret !== process.env.CRON_SECRET) {
+  if (!verifySecret(cronSecret, process.env.CRON_SECRET)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

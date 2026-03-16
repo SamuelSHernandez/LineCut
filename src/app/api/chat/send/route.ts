@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { sendPush } from "@/lib/push";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -16,9 +17,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
 
+  if (body.length > 1000) {
+    return NextResponse.json({ error: "Message too long" }, { status: 400 });
+  }
+
+  // Verify authenticated user matches senderId
+  const supabaseAuth = await createClient();
+  const { data: { user } } = await supabaseAuth.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (user.id !== senderId) {
+    return NextResponse.json({ error: "Sender mismatch" }, { status: 403 });
+  }
+
   // API-level rate limit: 10 messages per minute per user
   const { success: withinLimit, remaining } = rateLimit(
-    `chat:${senderId}`,
+    `chat:${user.id}`,
     10,
     60_000
   );

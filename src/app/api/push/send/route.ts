@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import webpush from "web-push";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { verifySecret } from "@/lib/auth-utils";
 
 export interface SendPushBody {
   userId: string;
@@ -11,6 +12,11 @@ export interface SendPushBody {
 }
 
 export async function POST(req: NextRequest) {
+  const secret = req.headers.get("x-internal-secret");
+  if (!verifySecret(secret, process.env.INTERNAL_API_SECRET)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   let payload: SendPushBody;
   try {
     payload = await req.json();

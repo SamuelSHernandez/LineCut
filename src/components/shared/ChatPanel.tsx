@@ -17,6 +17,7 @@ export default function ChatPanel({ orderId, userId, otherPartyName }: ChatPanel
   const [input, setInput] = useState("");
   const [reactingTo, setReactingTo] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const { messages, sendMessage, sendImage, sending, otherTyping, setTyping, toggleReaction, reactions } = useRealtimeChat({
     orderId,
     userId,
@@ -50,6 +51,7 @@ export default function ChatPanel({ orderId, userId, otherPartyName }: ChatPanel
     const body = input.trim();
     if (!body) return;
     setInput("");
+    setUploadError(null);
     await sendMessage(body);
 
     fetch("/api/chat/send", {
@@ -66,8 +68,14 @@ export default function ChatPanel({ orderId, userId, otherPartyName }: ChatPanel
     if (!file) return;
 
     // Validate
-    if (!file.type.startsWith("image/")) return;
-    if (file.size > 5 * 1024 * 1024) return; // 5MB limit
+    if (!file.type.startsWith("image/")) {
+      setUploadError("Only images are supported.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError("Image must be under 5 MB.");
+      return;
+    }
 
     setUploading(true);
     try {
@@ -75,14 +83,17 @@ export default function ChatPanel({ orderId, userId, otherPartyName }: ChatPanel
       const ext = file.name.split(".").pop() ?? "jpg";
       const path = `${orderId}/${crypto.randomUUID()}.${ext}`;
 
-      const { error: uploadError } = await supabase.storage
+      const { error: storageError } = await supabase.storage
         .from("chat-images")
         .upload(path, file, { contentType: file.type });
 
-      if (uploadError) {
-        console.error("[ChatPanel] Upload failed:", uploadError);
+      if (storageError) {
+        console.error("[ChatPanel] Upload failed:", storageError);
+        setUploadError("Upload failed. Try again.");
         return;
       }
+
+      setUploadError(null);
 
       const { data: urlData } = supabase.storage
         .from("chat-images")
@@ -241,6 +252,16 @@ export default function ChatPanel({ orderId, userId, otherPartyName }: ChatPanel
               </div>
             )}
           </div>
+
+          {/* Upload error */}
+          {uploadError && (
+            <div
+              role="alert"
+              className="mx-3 mt-2 px-3 py-1.5 bg-[#FFF3D6] border border-ketchup rounded-[6px] font-[family-name:var(--font-body)] text-[12px] text-ketchup"
+            >
+              {uploadError}
+            </div>
+          )}
 
           {/* Input */}
           <div className="flex items-center gap-2 px-3 py-2 border-t border-card-border">

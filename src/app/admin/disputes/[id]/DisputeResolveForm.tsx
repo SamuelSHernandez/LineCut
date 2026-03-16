@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { resolveDispute } from "../actions";
 
 export default function DisputeResolveForm({
   disputeId,
@@ -20,30 +21,21 @@ export default function DisputeResolveForm({
     setError(null);
 
     try {
-      const res = await fetch("/api/admin/resolve-dispute", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_ADMIN_SECRET ?? ""}`,
-        },
-        body: JSON.stringify({
-          disputeId,
-          resolution,
-          notes: notes.trim() || null,
-        }),
+      const result = await resolveDispute({
+        disputeId,
+        resolution,
+        notes: notes.trim() || null,
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error ?? "Failed to resolve dispute.");
+      if (!result.ok) {
+        setError(result.error ?? "Failed to resolve dispute.");
         return;
       }
 
       router.push("/admin/disputes");
       router.refresh();
     } catch {
-      setError("Network error. Please try again.");
+      setError("Something went wrong. Please try again.");
     } finally {
       setSubmitting(false);
     }
