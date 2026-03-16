@@ -31,7 +31,7 @@ export default function Home() {
         <div className="absolute inset-0 bg-gradient-to-b from-chalkboard/30 via-chalkboard/10 to-chalkboard/95" />
 
         {/* Content */}
-        <div className="relative z-10 flex flex-col items-center text-center px-6 pt-24">
+        <div className="relative z-10 flex flex-col items-center text-center px-6 pt-[calc(6rem+env(safe-area-inset-top,0px))]">
           <p
             className="font-[family-name:var(--font-mono)] text-[11px] tracking-[3px] uppercase text-mustard mb-6 animate-fade-in"
             style={{ animationDelay: "0.2s" }}

@@ -2,7 +2,9 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import Logo from "@/components/Logo";
 import { createClient } from "@/lib/supabase/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { logout } from "@/app/auth/actions";
+import WaitlistShare from "./WaitlistShare";
 
 export default async function WaitlistPage() {
   const supabase = await createClient();
@@ -18,7 +20,7 @@ export default async function WaitlistPage() {
   // Get this user's profile
   const { data: profile } = await supabase
     .from("profiles")
-    .select("display_name, is_buyer, is_seller, created_at")
+    .select("display_name, is_buyer, is_seller, created_at, email")
     .eq("id", user.id)
     .single();
 
@@ -28,45 +30,42 @@ export default async function WaitlistPage() {
     .select("*", { count: "exact", head: true })
     .lte("created_at", profile?.created_at ?? new Date().toISOString());
 
-  const position = count ?? 1;
   const displayName = profile?.display_name ?? "Friend";
   const firstName = displayName.split(" ")[0];
   const role = profile?.is_seller ? "seller" : "buyer";
 
+  // Look up referral data from waitlist_entries
+  const userEmail = (profile?.email ?? user.email ?? "").toLowerCase().trim();
+  const admin = getAdminClient();
+  const { data: waitlistEntry } = await admin
+    .from("waitlist_entries")
+    .select("referral_code, referral_count, credit_earned, created_at")
+    .eq("email", userEmail)
+    .single();
+
+  // Position = profile order minus referral bumps
+  const rawPosition = count ?? 1;
+  const referralBump = (waitlistEntry?.referral_count ?? 0) * 5;
+  const position = Math.max(1, rawPosition - referralBump);
+
   return (
-    <div className="min-h-screen flex flex-col">
-      <nav className="flex items-center justify-between px-6 md:px-12 py-5">
+    <div className="min-h-screen flex flex-col pb-[env(safe-area-inset-bottom,0px)]">
+      <nav className="flex items-center justify-between px-6 md:px-12 py-5 pt-[max(1.25rem,env(safe-area-inset-top,0px))]">
         <Link href="/">
           <Logo size="sm" />
         </Link>
         <form action={logout}>
           <button
             type="submit"
-            className="font-[family-name:var(--font-body)] text-[13px] font-medium text-sidewalk hover:text-chalkboard transition-colors cursor-pointer"
+            className="font-[family-name:var(--font-body)] text-[14px] font-medium text-sidewalk hover:text-chalkboard transition-colors cursor-pointer min-h-[44px] flex items-center"
           >
             Log Out
           </button>
         </form>
       </nav>
 
-      <main className="flex-1 flex items-center justify-center px-6 py-12">
+      <main className="flex-1 flex items-center justify-center px-6 py-8 sm:py-12">
         <div className="w-full max-w-md flex flex-col items-center text-center">
-          {/* Green success indicator */}
-          <div className="w-20 h-20 rounded-full bg-[#DDEFDD] flex items-center justify-center mb-6">
-            <svg
-              width="40"
-              height="40"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#2D6A2D"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          </div>
-
           <p className="font-[family-name:var(--font-mono)] text-[11px] tracking-[3px] uppercase text-[#2D6A2D] mb-3">
             You&apos;re in, {firstName}
           </p>
@@ -90,8 +89,8 @@ export default async function WaitlistPage() {
               </p>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 border-b border-dashed border-[#ddd4c4] pb-4 mb-4">
-              <div>
+            <div className="flex justify-between border-b border-dashed border-[#ddd4c4] pb-4 mb-4">
+              <div className="min-w-0">
                 <p className="font-[family-name:var(--font-mono)] text-[10px] tracking-[2px] text-sidewalk uppercase">
                   Position
                 </p>
@@ -99,7 +98,7 @@ export default async function WaitlistPage() {
                   #{position}
                 </p>
               </div>
-              <div>
+              <div className="min-w-0 text-center">
                 <p className="font-[family-name:var(--font-mono)] text-[10px] tracking-[2px] text-sidewalk uppercase">
                   Role
                 </p>
@@ -107,22 +106,56 @@ export default async function WaitlistPage() {
                   {role === "seller" ? "EARNER" : "EATER"}
                 </p>
               </div>
-              <div>
+              <div className="min-w-0 text-right">
                 <p className="font-[family-name:var(--font-mono)] text-[10px] tracking-[2px] text-sidewalk uppercase">
-                  Status
+                  Referrals
                 </p>
-                <div className="mt-1">
-                  <span className="inline-block bg-[#DDEFDD] text-[#2D6A2D] font-[family-name:var(--font-body)] text-[11px] font-semibold uppercase tracking-[0.3px] px-3 py-1 rounded-full">
-                    Confirmed
-                  </span>
-                </div>
+                <p className="font-[family-name:var(--font-display)] text-[22px] text-mustard">
+                  {waitlistEntry?.referral_count ?? 0}
+                </p>
               </div>
             </div>
+
+            {/* Credit status */}
+            {waitlistEntry?.credit_earned ? (
+              <div className="bg-[#DDEFDD] rounded-[6px] px-3 py-2 mb-4 text-center">
+                <p className="font-[family-name:var(--font-body)] text-[12px] text-[#2D6A2D] font-semibold">
+                  $5 launch credit locked in
+                </p>
+              </div>
+            ) : waitlistEntry ? (
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="font-[family-name:var(--font-mono)] text-[10px] tracking-[2px] text-sidewalk uppercase">
+                    $5 credit progress
+                  </p>
+                  <p className="font-[family-name:var(--font-mono)] text-[10px] tracking-[2px] text-sidewalk">
+                    {Math.min(waitlistEntry.referral_count, 3)}/3
+                  </p>
+                </div>
+                <div className="w-full h-2 bg-butcher-paper rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[#2D6A2D] rounded-full transition-all duration-500"
+                    style={{
+                      width: `${(Math.min(waitlistEntry.referral_count, 3) / 3) * 100}%`,
+                    }}
+                  />
+                </div>
+                <p className="font-[family-name:var(--font-body)] text-[11px] text-sidewalk mt-1">
+                  Refer 3 friends to earn $5 off your first order
+                </p>
+              </div>
+            ) : null}
 
             <p className="font-[family-name:var(--font-mono)] text-[10px] tracking-[2px] text-sidewalk text-center uppercase">
               &#9986; &#8212; &#8212; &#8212; hold this ticket &#8212; &#8212; &#8212; &#9986;
             </p>
           </div>
+
+          {/* Share section */}
+          {waitlistEntry?.referral_code && (
+            <WaitlistShare referralCode={waitlistEntry.referral_code} />
+          )}
 
           <p className="font-[family-name:var(--font-body)] text-[14px] text-sidewalk mt-8 max-w-sm leading-relaxed">
             We&apos;re launching at Katz&apos;s Deli first. We&apos;ll let you know when it&apos;s go time.
@@ -130,7 +163,7 @@ export default async function WaitlistPage() {
 
           <Link
             href="/"
-            className="font-[family-name:var(--font-body)] text-[13px] text-ketchup font-medium hover:underline mt-4"
+            className="font-[family-name:var(--font-body)] text-[14px] text-ketchup font-medium hover:underline mt-4 min-h-[44px] flex items-center"
           >
             Back to home
           </Link>
