@@ -28,13 +28,4 @@ export const restaurants: Restaurant[] = [
     cuisine: ["Deli", "Bagels"],
     waitEstimate: "~15 min",
   },
-  {
-    id: "test",
-    name: "Test",
-    address: "Test Location, MD",
-    lat: 39.09148115780004,
-    lng: -76.96419360169294,
-    cuisine: ["Test"],
-    waitEstimate: "~10 min",
-  },
 ];

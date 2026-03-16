@@ -155,16 +155,11 @@ export async function syncPaymentMethod() {
   const { user } = await getAuthenticatedUser();
   const admin = getAdminClient();
 
-  console.log("[syncPaymentMethod] userId:", user.id);
-  console.log("[syncPaymentMethod] SERVICE_ROLE_KEY set:", !!process.env.SUPABASE_SERVICE_ROLE_KEY);
-
   const { data: profile, error: selectError } = await admin
     .from("profiles")
     .select("stripe_customer_id")
     .eq("id", user.id)
     .single();
-
-  console.log("[syncPaymentMethod] profile select:", { profile, selectError });
 
   if (!profile?.stripe_customer_id) {
     return { error: "No Stripe customer found." };
@@ -175,8 +170,6 @@ export async function syncPaymentMethod() {
     type: "card",
     limit: 1,
   });
-
-  console.log("[syncPaymentMethod] Stripe PMs found:", paymentMethods.data.length, paymentMethods.data[0]?.card?.last4);
 
   const pm = paymentMethods.data[0];
   if (!pm?.card) {
@@ -189,14 +182,10 @@ export async function syncPaymentMethod() {
     payment_method_exp_month: pm.card.exp_month,
     payment_method_exp_year: pm.card.exp_year,
   };
-  console.log("[syncPaymentMethod] Updating profile with:", updatePayload);
-
   const { error: updateError, count } = await admin
     .from("profiles")
     .update(updatePayload, { count: "exact" })
     .eq("id", user.id);
-
-  console.log("[syncPaymentMethod] Update result — error:", updateError, "count:", count);
 
   if (updateError) {
     console.error("[syncPaymentMethod] Profile update failed:", updateError);
