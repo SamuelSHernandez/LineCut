@@ -59,9 +59,8 @@ self.addEventListener("fetch", (event) => {
   // Skip browser-extension requests
   if (!url.protocol.startsWith("http")) return;
 
-  // API routes — network-first, fall back to cache
+  // API routes — never cache, let browser handle normally
   if (url.pathname.startsWith("/api/")) {
-    event.respondWith(networkFirst(request));
     return;
   }
 

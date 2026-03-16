@@ -23,7 +23,7 @@ export default async function DashboardLayout({
     .eq("id", user.id)
     .single();
 
-  if (profileError) {
+  if (profileError && process.env.NODE_ENV === "development") {
     console.error("[DashboardLayout] Failed to fetch profile:", profileError.message);
   }
 
