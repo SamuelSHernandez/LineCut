@@ -38,6 +38,20 @@ export async function updateSession(request: NextRequest) {
 
     const path = request.nextUrl.pathname;
 
+    // Referral links: /?ref=CODE → redirect to signup (unauthenticated) or waitlist (authenticated)
+    if (path === "/" && request.nextUrl.searchParams.has("ref")) {
+      const ref = request.nextUrl.searchParams.get("ref")!;
+      const url = request.nextUrl.clone();
+      if (user) {
+        url.pathname = "/waitlist";
+        url.searchParams.delete("ref");
+      } else {
+        url.pathname = "/auth/signup";
+        url.searchParams.set("ref", ref);
+      }
+      return NextResponse.redirect(url);
+    }
+
     if (user) {
       if (features.waitlistMode) {
         // In waitlist mode, lock authenticated users to /waitlist (allow /, /auth/*, /waitlist*)

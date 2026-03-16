@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { features } from "@/lib/features";
 
 export type AuthState = {
   error: string | null;
@@ -28,6 +29,7 @@ export async function signup(
   const password = formData.get("password") as string;
   const displayName = formData.get("displayName") as string;
   const role = formData.get("role") as string;
+  const ref = (formData.get("ref") as string) || undefined;
 
   if (!email || !password || !displayName || !role) {
     return { error: "All fields are required." };
@@ -51,6 +53,7 @@ export async function signup(
         display_name: displayName,
         is_buyer: role === "buyer",
         is_seller: role === "seller",
+        ...(ref ? { referred_by: ref } : {}),
       },
     },
   });
@@ -89,6 +92,11 @@ export async function login(
 
   if (error) {
     return { error: friendlyError(error.message) };
+  }
+
+  // In waitlist mode, always send to /waitlist after login
+  if (features.waitlistMode) {
+    redirect("/waitlist");
   }
 
   // Redirect to the original destination, or role-based dashboard

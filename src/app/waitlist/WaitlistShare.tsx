@@ -12,15 +12,15 @@ export default function WaitlistShare({ referralCode }: { referralCode: string }
     setCanShare("share" in navigator);
   }, []);
 
-  const shareUrl = origin ? `${origin}/?ref=${referralCode}` : "";
+  const shareUrl = origin ? `${origin}/auth/signup?ref=${referralCode}` : "";
   const shareText = "I just cut the line at LineCut — skip ahead of me:";
 
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(`${shareText} ${shareUrl}`).then(() => {
+    navigator.clipboard.writeText(shareUrl).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
-  }, [shareUrl, shareText]);
+  }, [shareUrl]);
 
   const handleNativeShare = useCallback(() => {
     if (!navigator.share) return;
@@ -28,13 +28,37 @@ export default function WaitlistShare({ referralCode }: { referralCode: string }
   }, [shareUrl, shareText]);
 
   return (
-    <div className="mt-6 w-full">
-      <p className="font-[family-name:var(--font-display)] text-[16px] tracking-[1px] text-center mb-3">
-        SHARE TO SKIP AHEAD
+    <div className="mt-8 w-full">
+      <p className="font-[family-name:var(--font-display)] text-[20px] tracking-[1px] text-center mb-4">
+        Share to skip ahead
       </p>
 
-      <div className="flex items-center gap-2">
-        <div className="flex-1 bg-butcher-paper rounded-[6px] border border-[#eee6d8] px-3 py-3 overflow-hidden min-w-0">
+      {/* Primary CTA: Text a Friend */}
+      <div className="flex flex-col gap-3">
+        {canShare ? (
+          <button
+            type="button"
+            onClick={handleNativeShare}
+            className="w-full min-h-[52px] bg-ketchup text-ticket font-[family-name:var(--font-mono)] text-[14px] font-semibold tracking-[2px] uppercase rounded-[6px] active:scale-[0.98] transition-transform"
+          >
+            Text a Friend
+          </button>
+        ) : (
+          <a
+            href={`sms:?&body=${encodeURIComponent(`${shareText} ${shareUrl}`)}`}
+            className="w-full min-h-[52px] flex items-center justify-center bg-ketchup text-ticket font-[family-name:var(--font-mono)] text-[14px] font-semibold tracking-[2px] uppercase rounded-[6px] active:scale-[0.98] transition-transform text-center"
+          >
+            Text a Friend
+          </a>
+        )}
+      </div>
+
+      {/* Secondary: Copy link */}
+      <p className="font-[family-name:var(--font-mono)] text-[10px] tracking-[2px] text-sidewalk uppercase text-center mt-5 mb-2">
+        Or copy your link
+      </p>
+      <div className="flex items-center gap-0 rounded-[6px] overflow-hidden border border-[#eee6d8]">
+        <div className="flex-1 bg-butcher-paper px-3 py-3 overflow-hidden min-w-0">
           <p className="font-[family-name:var(--font-mono)] text-[12px] text-sidewalk truncate">
             {shareUrl}
           </p>
@@ -42,33 +66,11 @@ export default function WaitlistShare({ referralCode }: { referralCode: string }
         <button
           type="button"
           onClick={handleCopy}
-          className="min-h-[44px] px-5 bg-chalkboard text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] active:scale-95 transition-transform shrink-0"
+          className="min-h-[44px] px-5 bg-chalkboard text-ticket font-[family-name:var(--font-mono)] text-[12px] font-semibold tracking-[1px] uppercase shrink-0 active:scale-95 transition-transform"
         >
           {copied ? "Copied!" : "Copy"}
         </button>
       </div>
-
-      <div className="flex gap-3 mt-3">
-        {canShare && (
-          <button
-            type="button"
-            onClick={handleNativeShare}
-            className="flex-1 min-h-[48px] bg-chalkboard text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] active:scale-95 transition-transform"
-          >
-            Share
-          </button>
-        )}
-        <a
-          href={`sms:?&body=${encodeURIComponent(`${shareText} ${shareUrl}`)}`}
-          className="flex-1 min-h-[48px] flex items-center justify-center bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[14px] font-semibold rounded-[6px] active:scale-95 transition-transform text-center"
-        >
-          Text a Friend
-        </a>
-      </div>
-
-      <p className="font-[family-name:var(--font-body)] text-[11px] text-sidewalk text-center mt-2">
-        Each friend who joins = you skip 5 spots
-      </p>
     </div>
   );
 }

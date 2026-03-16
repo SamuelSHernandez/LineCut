@@ -1,9 +1,12 @@
+import { Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import Logo from "@/components/Logo";
 import Nav from "@/components/Nav";
 import Ticker from "@/components/Ticker";
 import SignupForm from "@/components/SignupForm";
+import HowItWorks from "@/components/HowItWorks";
+import WaitlistCount from "@/components/WaitlistCount";
 import { features } from "@/lib/features";
 
 const launchLocations = [
@@ -64,7 +67,7 @@ export default function Home() {
               >
                 I&apos;m Hungry
               </Link>
-              <span className="font-[family-name:var(--font-mono)] text-[10px] tracking-[2px] text-butcher-paper/40">
+              <span className="font-[family-name:var(--font-mono)] text-[10px] tracking-[2px] text-butcher-paper/60">
                 See how it works
               </span>
             </div>
@@ -75,7 +78,7 @@ export default function Home() {
               >
                 I&apos;m In Line
               </Link>
-              <span className="font-[family-name:var(--font-mono)] text-[10px] tracking-[2px] text-butcher-paper/40">
+              <span className="font-[family-name:var(--font-mono)] text-[10px] tracking-[2px] text-butcher-paper/60">
                 Start earning
               </span>
             </div>
@@ -87,8 +90,8 @@ export default function Home() {
           className="absolute bottom-8 flex flex-col items-center gap-2 animate-fade-in"
           style={{ animationDelay: "1.2s" }}
         >
-          <div className="w-px h-8 bg-butcher-paper/30 origin-top" style={{ animation: "scrollLine 2s ease-in-out infinite" }} />
-          <span className="font-[family-name:var(--font-mono)] text-[9px] tracking-[3px] text-butcher-paper/40 uppercase">
+          <div className="w-px h-8 bg-butcher-paper/50 origin-top" style={{ animation: "scrollLine 2s ease-in-out infinite" }} />
+          <span className="font-[family-name:var(--font-mono)] text-[9px] tracking-[3px] text-butcher-paper/60 uppercase">
             Scroll
           </span>
         </div>
@@ -109,31 +112,27 @@ export default function Home() {
               THE BEST FOOD HAS THE WORST LINES
             </h2>
             <p className="font-[family-name:var(--font-body)] text-[16px] text-sidewalk leading-relaxed max-w-lg">
-              Forty-seven minutes for a sandwich. You&apos;ve done it. Everyone&apos;s done it. But right now, someone&apos;s already standing in that line — and they&apos;d happily grab yours too.
+              Forty-seven minutes for a sandwich. You&apos;ve done it. Everyone&apos;s done it. But right now, someone&apos;s already standing in that line — and they&apos;d happily order yours while they&apos;re at it.
             </p>
           </div>
 
-          {/* Queue visualization */}
-          <div className="bg-chalkboard rounded-[10px] p-8 flex flex-col items-center justify-center min-h-[280px]">
-            <div className="grid grid-cols-6 gap-3 mb-6">
-              {Array.from({ length: 18 }).map((_, i) => (
-                <div
-                  key={i}
-                  className={`w-5 h-5 rounded-full ${
-                    i < 3
-                      ? "bg-ketchup"
-                      : "bg-butcher-paper/20"
-                  }`}
-                  style={
-                    i < 3
-                      ? { animation: "pulse 2s ease-in-out infinite", animationDelay: `${i * 0.3}s` }
-                      : undefined
-                  }
-                />
-              ))}
-            </div>
-            <p className="font-[family-name:var(--font-mono)] text-[11px] tracking-[2px] text-butcher-paper/50 uppercase">
-              Average wait: 47 min
+          {/* Deli ticket number display */}
+          <div className="bg-chalkboard rounded-[10px] p-8 md:p-10 flex flex-col items-center justify-center min-h-[280px]">
+            <p className="font-[family-name:var(--font-mono)] text-[10px] tracking-[3px] text-butcher-paper/60 uppercase mb-2">
+              Now Serving
+            </p>
+            <p className="font-[family-name:var(--font-display)] text-[clamp(64px,12vw,96px)] leading-none text-butcher-paper tracking-[4px]">
+              #74
+            </p>
+            <div className="w-16 border-t border-butcher-paper/30 my-4" />
+            <p className="font-[family-name:var(--font-mono)] text-[10px] tracking-[3px] text-butcher-paper/60 uppercase mb-1">
+              Your Ticket
+            </p>
+            <p className="font-[family-name:var(--font-display)] text-[clamp(36px,8vw,52px)] leading-none text-ketchup tracking-[4px]">
+              #121
+            </p>
+            <p className="font-[family-name:var(--font-mono)] text-[11px] tracking-[2px] text-butcher-paper/50 mt-5">
+              47 people ahead of you
             </p>
           </div>
         </div>
@@ -152,102 +151,106 @@ export default function Home() {
             TWO SIDES. ONE TRANSACTION.
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Hungry side */}
-            <div className="bg-ticket rounded-[10px] border border-[#eee6d8] overflow-hidden">
-              <div className="h-1 bg-ketchup" />
-              <div className="p-8">
-                <h3 className="font-[family-name:var(--font-display)] text-[22px] tracking-[2px] mb-8 text-ketchup">
-                  IF YOU&apos;RE HUNGRY
-                </h3>
-                <div className="flex flex-col gap-7">
-                  {[
-                    { num: "1", title: "BROWSE NEARBY LINES", desc: "See who's already waiting at your favorite spots." },
-                    { num: "2", title: "PLACE YOUR ORDER", desc: "Pick your items. They order for you at the counter." },
-                    { num: "3", title: "MEET OUTSIDE", desc: "Quick handoff. No line. You eat, they earn." },
-                  ].map((step) => (
-                    <div key={step.num} className="flex items-start gap-4">
-                      <div className="w-12 h-12 rounded-full border-[2.5px] border-ketchup flex items-center justify-center shrink-0">
-                        <span className="font-[family-name:var(--font-display)] text-[20px] text-ketchup">
-                          {step.num}
-                        </span>
-                      </div>
-                      <div>
-                        <h4 className="font-[family-name:var(--font-display)] text-[16px] tracking-[1px] mb-1">
-                          {step.title}
-                        </h4>
-                        <p className="font-[family-name:var(--font-body)] text-[13px] text-sidewalk leading-relaxed">
-                          {step.desc}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* In-line side */}
-            <div className="bg-chalkboard rounded-[10px] overflow-hidden">
-              <div className="h-1 bg-mustard" />
-              <div className="p-8">
-                <h3 className="font-[family-name:var(--font-display)] text-[22px] tracking-[2px] mb-8 text-mustard">
-                  IF YOU&apos;RE IN LINE
-                </h3>
-                <div className="flex flex-col gap-7">
-                  {[
-                    { num: "1", title: "POST YOUR SPOT", desc: "Share your position and how many orders you can carry." },
-                    { num: "2", title: "GET REQUESTS", desc: "Accept orders from nearby hungry people." },
-                    { num: "3", title: "EARN A TIP", desc: "Hand off the food. Get paid for waiting." },
-                  ].map((step) => (
-                    <div key={step.num} className="flex items-start gap-4">
-                      <div className="w-12 h-12 rounded-full border-[2.5px] border-mustard flex items-center justify-center shrink-0">
-                        <span className="font-[family-name:var(--font-display)] text-[20px] text-mustard">
-                          {step.num}
-                        </span>
-                      </div>
-                      <div>
-                        <h4 className="font-[family-name:var(--font-display)] text-[16px] tracking-[1px] mb-1 text-butcher-paper">
-                          {step.title}
-                        </h4>
-                        <p className="font-[family-name:var(--font-body)] text-[13px] text-butcher-paper/60 leading-relaxed">
-                          {step.desc}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
+          <HowItWorks />
         </div>
       </section>
 
-      {/* Social Proof / Stats */}
+
+      {/* Without vs With LineCut */}
       <section className="bg-chalkboard py-20 md:py-28 px-6 md:px-12">
-        <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-12 text-center">
-          <div>
-            <p className="font-[family-name:var(--font-display)] text-[clamp(48px,8vw,72px)] leading-none text-ketchup">
-              47 min
-            </p>
-            <p className="font-[family-name:var(--font-body)] text-[14px] text-sidewalk mt-2">
-              Average line at Katz&apos;s
-            </p>
-          </div>
-          <div>
-            <p className="font-[family-name:var(--font-display)] text-[clamp(48px,8vw,72px)] leading-none text-mustard">
-              $0
-            </p>
-            <p className="font-[family-name:var(--font-body)] text-[14px] text-sidewalk mt-2">
-              No markup on food
-            </p>
-          </div>
-          <div>
-            <p className="font-[family-name:var(--font-display)] text-[clamp(48px,8vw,72px)] leading-none text-butcher-paper">
-              1 block
-            </p>
-            <p className="font-[family-name:var(--font-body)] text-[14px] text-sidewalk mt-2">
-              Average pickup distance
-            </p>
+        <div className="max-w-5xl mx-auto">
+          <p className="font-[family-name:var(--font-mono)] text-[11px] tracking-[3px] uppercase text-sidewalk text-center mb-16">
+            You&apos;re a block from Katz&apos;s. You&apos;re hungry.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-20">
+            {/* Without */}
+            <div>
+              <div className="flex flex-col gap-6">
+                <div className="flex items-start gap-4">
+                  <span className="w-2.5 h-2.5 rounded-full bg-butcher-paper/50 mt-2 shrink-0" />
+                  <div>
+                    <p className="font-[family-name:var(--font-body)] text-[15px] text-butcher-paper/60 leading-relaxed">
+                      Join the line. It wraps past the tables.
+                    </p>
+                    <p className="font-[family-name:var(--font-mono)] text-[11px] text-butcher-paper/50 mt-1">
+                      ~30 min avg wait
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-4">
+                  <span className="w-2.5 h-2.5 rounded-full bg-butcher-paper/50 mt-2 shrink-0" />
+                  <div>
+                    <p className="font-[family-name:var(--font-body)] text-[15px] text-butcher-paper/60 leading-relaxed">
+                      Reach the counter. Order. They carve it fast.
+                    </p>
+                    <p className="font-[family-name:var(--font-mono)] text-[11px] text-butcher-paper/50 mt-1">
+                      ~2 min
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-4">
+                  <span className="w-2.5 h-2.5 rounded-full bg-butcher-paper/50 mt-2 shrink-0" />
+                  <p className="font-[family-name:var(--font-body)] text-[15px] text-butcher-paper/60 leading-relaxed">
+                    Find a seat if you can.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-10">
+                <p className="font-[family-name:var(--font-display)] text-[clamp(40px,8vw,56px)] leading-none text-ketchup">
+                  32 min
+                </p>
+                <p className="font-[family-name:var(--font-body)] text-[14px] text-butcher-paper/60 mt-1">
+                  Mostly just standing there.
+                </p>
+                <p className="font-[family-name:var(--font-mono)] text-[10px] text-butcher-paper/50 mt-1 tracking-[1px]">
+                  Based on avg. peak weekend waits
+                </p>
+              </div>
+            </div>
+
+            {/* With LineCut */}
+            <div>
+              <p className="font-[family-name:var(--font-mono)] text-[10px] tracking-[3px] uppercase text-mustard mb-6">
+                With LineCut
+              </p>
+              <div className="flex flex-col gap-6">
+                <div className="flex items-start gap-4">
+                  <span className="w-2.5 h-2.5 rounded-full bg-mustard mt-2 shrink-0" />
+                  <p className="font-[family-name:var(--font-body)] text-[15px] text-butcher-paper leading-relaxed">
+                    Open LineCut. Someone&apos;s already at Katz&apos;s.
+                  </p>
+                </div>
+                <div className="flex items-start gap-4">
+                  <span className="w-2.5 h-2.5 rounded-full bg-mustard mt-2 shrink-0" />
+                  <p className="font-[family-name:var(--font-body)] text-[15px] text-butcher-paper leading-relaxed">
+                    Send your order. They add it at the counter.
+                  </p>
+                </div>
+                <div className="flex items-start gap-4">
+                  <span className="w-2.5 h-2.5 rounded-full bg-mustard mt-2 shrink-0" />
+                  <p className="font-[family-name:var(--font-body)] text-[15px] text-butcher-paper leading-relaxed">
+                    Walk to the handoff spot.
+                  </p>
+                </div>
+                <div className="flex items-start gap-4">
+                  <span className="w-2.5 h-2.5 rounded-full bg-mustard mt-2 shrink-0" />
+                  <p className="font-[family-name:var(--font-body)] text-[15px] text-butcher-paper leading-relaxed">
+                    Grab your food. Done.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-10">
+                <p className="font-[family-name:var(--font-display)] text-[clamp(40px,8vw,56px)] leading-none text-mustard">
+                  8 min
+                </p>
+                <p className="font-[family-name:var(--font-body)] text-[14px] text-butcher-paper/60 mt-1">
+                  Same sandwich. No line.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -319,6 +322,9 @@ export default function Home() {
           </div>
           {features.waitlistMode ? (
             <>
+              <Suspense>
+                <WaitlistCount />
+              </Suspense>
               <h2 className="font-[family-name:var(--font-display)] text-[clamp(32px,6vw,52px)] tracking-[2px] text-ticket leading-none mb-4">
                 GET EARLY ACCESS
               </h2>

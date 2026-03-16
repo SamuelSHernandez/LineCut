@@ -3,15 +3,40 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Logo from "./Logo";
+import { createBrowserClient } from "@supabase/ssr";
 
 export default function Nav() {
   const [scrolled, setScrolled] = useState(false);
+  const [user, setUser] = useState<{ displayName: string } | null>(null);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  useEffect(() => {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+    supabase.auth.getUser().then(({ data: { user: u } }) => {
+      if (u) {
+        setUser({
+          displayName: u.user_metadata?.display_name ?? u.email?.split("@")[0] ?? "User",
+        });
+      }
+    });
+  }, []);
+
+  const initials = user
+    ? user.displayName
+        .split(" ")
+        .map((w) => w[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : "";
 
   return (
     <nav
@@ -33,22 +58,52 @@ export default function Nav() {
         >
           How It Works
         </a>
-        <Link
-          href="/auth/login"
-          className={`hidden sm:block font-[family-name:var(--font-body)] text-[13px] font-medium transition-colors ${
-            scrolled
-              ? "text-sidewalk hover:text-chalkboard"
-              : "text-butcher-paper/70 hover:text-butcher-paper"
-          }`}
-        >
-          Log In
-        </Link>
-        <Link
-          href="/auth/signup"
-          className="px-5 py-2.5 bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[13px] font-semibold rounded-[6px] hover:opacity-90 transition-opacity"
-        >
-          Sign Up
-        </Link>
+        {user ? (
+          <Link
+            href="/waitlist"
+            className={`flex items-center gap-2.5 group ${
+              scrolled ? "" : ""
+            }`}
+          >
+            <span
+              className={`font-[family-name:var(--font-body)] text-[13px] font-medium transition-colors hidden sm:block ${
+                scrolled
+                  ? "text-sidewalk group-hover:text-chalkboard"
+                  : "text-butcher-paper/70 group-hover:text-butcher-paper"
+              }`}
+            >
+              My Spot
+            </span>
+            <span
+              className={`w-8 h-8 rounded-full flex items-center justify-center font-[family-name:var(--font-mono)] text-[11px] font-bold tracking-[1px] transition-colors ${
+                scrolled
+                  ? "bg-chalkboard text-butcher-paper"
+                  : "bg-butcher-paper/20 text-butcher-paper border border-butcher-paper/30"
+              }`}
+            >
+              {initials}
+            </span>
+          </Link>
+        ) : (
+          <>
+            <Link
+              href="/auth/login"
+              className={`hidden sm:block font-[family-name:var(--font-body)] text-[13px] font-medium transition-colors ${
+                scrolled
+                  ? "text-sidewalk hover:text-chalkboard"
+                  : "text-butcher-paper/70 hover:text-butcher-paper"
+              }`}
+            >
+              Log In
+            </Link>
+            <Link
+              href="/auth/signup"
+              className="px-5 py-2.5 bg-ketchup text-ticket font-[family-name:var(--font-body)] text-[13px] font-semibold rounded-[6px] hover:opacity-90 transition-opacity"
+            >
+              Sign Up
+            </Link>
+          </>
+        )}
       </div>
     </nav>
   );

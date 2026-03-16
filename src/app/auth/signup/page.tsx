@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useActionState } from "react";
+import { Suspense, useActionState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Logo from "@/components/Logo";
@@ -12,6 +12,15 @@ function SignupForm() {
   const searchParams = useSearchParams();
   const roleParam = searchParams.get("role");
   const emailParam = searchParams.get("email") ?? "";
+  const refParam = searchParams.get("ref") ?? "";
+
+  // Persist referral code from URL so it survives the signup flow
+  useEffect(() => {
+    const ref = searchParams.get("ref");
+    if (ref) {
+      sessionStorage.setItem("linecut_ref", ref);
+    }
+  }, [searchParams]);
   const defaultRole =
     roleParam === "seller" ? "seller" : roleParam === "buyer" ? "buyer" : "";
 
@@ -28,6 +37,7 @@ function SignupForm() {
       )}
 
       <form action={formAction} className="flex flex-col gap-4">
+        {refParam && <input type="hidden" name="ref" value={refParam} />}
         <div>
           <label htmlFor="signup-name" className="font-[family-name:var(--font-body)] text-[12px] font-medium text-sidewalk uppercase tracking-[1px] mb-1.5 block">
             Name
